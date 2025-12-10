@@ -1,9 +1,11 @@
 .env
 venv
 .idea
-app/persona.yaml
+persona.yaml
 __pycache__/
 *.py[cod]
 .github
 app/.github
 app/requirements.txt
+.gitignore
+.claude
