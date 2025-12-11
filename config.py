@@ -16,6 +16,10 @@ class Config:
     api_key: str = ""
     allowed_origins: list[str] = None
 
+    def __post_init__(self):
+        if self.allowed_origins is None:
+            self.allowed_origins = []
+
     @classmethod
     def from_env(cls) -> "Config":
         load_dotenv(override=True)

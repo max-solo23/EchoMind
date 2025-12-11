@@ -1,8 +1,14 @@
 from Evaluation import Evaluation
+from core.interfaces import LLMProvider
 
 
 class EvaluatorAgent:
-    def __init__(self, persona, llm, model):
+    def __init__(
+            self, 
+            persona, 
+            llm: LLMProvider, 
+            model
+        ):
         self.name = persona.name
         self.summary = persona.summary
         self.llm = llm

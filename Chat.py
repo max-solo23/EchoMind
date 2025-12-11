@@ -1,12 +1,23 @@
+from core.interfaces import LLMProvider
+from typing import Optional, Any
+
+
 class Chat:
-    def __init__(self, person, llm, llm_model, llm_tools, evaluator_llm):
+    def __init__(
+            self, 
+            person, 
+            llm: LLMProvider, 
+            llm_model: str, 
+            llm_tools, 
+            evaluator_llm: Optional["EvaluatorAgent"] = None
+        ):
         self.llm = llm
         self.llm_model = llm_model
         self.llm_tools = llm_tools
         self.person = person
         self.evaluator_llm = evaluator_llm
 
-    def chat(self, message, history):
+    def chat(self, message: str, history: list[dict]) -> str:
         person_system_prompt = self.person.system_prompt
 
         messages = [
@@ -35,18 +46,19 @@ class Chat:
                 done = True
 
         reply = msg.content
-        evaluation = self.evaluator_llm.evaluate(reply, message, history)
+        if self.evaluator_llm:
+            evaluation = self.evaluator_llm.evaluate(reply, message, history)
 
-        if evaluation.is_acceptable:
-            print("Passed evaluation - returning reply")
-        else:
-            print("Failed evaluation - returning reply")
-            print(message)
-            print(evaluation.feedback)
-            reply = self.rerun(reply, message, history, evaluation.feedback, self.person.system_prompt)
+            if evaluation.is_acceptable:
+                print("Passed evaluation - returning reply")
+            else:
+                print("Failed evaluation - returning reply")
+                print(message)
+                print(evaluation.feedback)
+                reply = self.rerun(reply, message, history, evaluation.feedback, self.person.system_prompt)
         return reply
 
-    def rerun(self, reply, message, history, feedback, system_prompt):
+    def rerun(self, reply: str, message: str, history: list[dict], feedback: str, system_prompt: str) -> str:
         updated_system_prompt = system_prompt + f"\n\n## Previous answer rejected\nYou just tried to reply, but the \
         quality control rejected your reply\n ## Your attempted answer:\n{reply}\n\n ## Reason \
         for rejection:\n{feedback}\n\n"
