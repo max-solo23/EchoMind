@@ -51,46 +51,11 @@ Replace the placeholder values with your actual credentials before running the a
 
 ## Profile Configuration
 
-Generate a persona profile by creating `persona.yaml` manually in the root directory. The application will not create this file for you, and the repository may ship without one so that you can supply your own details. Once the file exists, it defines metadata about the persona, the skill set, project history, and preferred response style used by the application.
+Create your persona profile:
 
-Skeleton structure:
-
-```
-name:
-title:
-summary: >
-  [Brief professional overview. Describe focus areas, motivations, and general goals.]
-
-skills:
-  programming_languages: []
-  frameworks_tools: []
-
-projects:
-  - name:
-    role:
-    tech_stack: []
-    description: >
-      [Short description of what the project does or demonstrates.]
-  - name:
-    role:
-    tech_stack: []
-    description: >
-      [Short description of what the project does or demonstrates.]
-
-education:
-  - name:
-    courses: []
-
-contacts:
-  github: ""
-  linkedin: ""
-  huggingface: ""
-
-style:
-  tone: factual
-  response_length: short
-  language_priority: English
-```
+1. Rename `persona.yaml.example` to `persona.yaml`
+2. Fill in your personal information (name, skills, projects, contacts, etc.)
+3. The AI will use this to represent you authentically
 
 ## API Usage
 

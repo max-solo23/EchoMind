@@ -1,0 +1,49 @@
+name: Your Name
+title: Your Professional Title
+summary: >
+  Brief professional overview. Describe your focus areas, motivations, and general goals.
+  This section helps the AI understand your professional identity and respond authentically.
+
+skills:
+  programming_languages:
+    - Python
+    - JavaScript
+    - Add your languages here
+  frameworks_tools:
+    - React
+    - FastAPI
+    - Add your tools here
+
+projects:
+  - name: Project Name
+    role: Your Role
+    tech_stack:
+      - Technology 1
+      - Technology 2
+    description: >
+      Short description of what the project does or demonstrates.
+      Explain the problem it solves and your contribution.
+
+  - name: Another Project
+    role: Your Role
+    tech_stack:
+      - Technology 1
+      - Technology 2
+    description: >
+      Short description of what the project does or demonstrates.
+
+education:
+  - name: Institution Name
+    courses:
+      - Course or Degree Name
+      - Another Course
+
+contacts:
+  github: "https://github.com/yourusername"
+  linkedin: "https://linkedin.com/in/yourprofile"
+  huggingface: "https://huggingface.co/yourusername"
+
+style:
+  tone: factual
+  response_length: short
+  language_priority: English
