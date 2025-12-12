@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import Literal
 
 
 class ChatResponse(BaseModel):
@@ -18,3 +19,15 @@ class HealthResponse(BaseModel):
 
     status: str = Field(..., description="Service status")
     version: str = Field(..., description="API version")
+
+
+# Streaming response models
+
+class StreamEvent(BaseModel):
+    """
+    SSE event model for streaming chat responses.
+
+    Format: {"delta": <string|null>, "metadata": <object|null>}
+    """
+    delta: str | None = Field(None, description="Text content to append")
+    metadata: dict | None = Field(None, description="Event metadata")
