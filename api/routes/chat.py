@@ -25,14 +25,14 @@ async def chat_endpoint(
     """
     try:
         if stream:
-            # Streaming mode
             return StreamingResponse(
                 chat_service.chat_stream(request.message, request.history),
                 media_type="text/event-stream",
                 headers={
-                    "Cache-Control": "no-cache",
+                    "Cache-Control": "no-cache, no-transform",
                     "Connection": "keep-alive",
-                }
+                    "X-Accel-Buffering": "no",
+                },
             )
         else:
             # Non-streaming mode (existing behavior)

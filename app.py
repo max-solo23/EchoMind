@@ -1,7 +1,7 @@
 from __future__ import annotations
 from config import Config
 import gradio as gr
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from Chat import Chat
 from EvaluatorAgent import EvaluatorAgent
 from Me import Me
@@ -20,7 +20,8 @@ def build_pushover_client(token: str | None, user: str | None) -> PushOver | Non
     return None
 
 config = Config.from_env()
-openai_client = OpenAI()
+openai_client = OpenAI(api_key=config.openai_api_key)
+async_openai_client = AsyncOpenAI(api_key=config.openai_api_key)
 
 me = Me(config.persona_name, config.persona_file)
 
@@ -33,6 +34,13 @@ else:
     
 pushover_client = build_pushover_client(config.pushover_token, config.pushover_user)
 tools = Tools(pushover_client)
-chat = Chat(me, openai_client, config.openai_model, tools, evaluator)
+chat = Chat(
+    me,
+    openai_client,
+    config.openai_model,
+    tools,
+    evaluator,
+    streaming_llm=async_openai_client,
+)
 
 gr.ChatInterface(chat.chat, type="messages").launch()

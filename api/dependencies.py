@@ -7,7 +7,7 @@ from Me import Me
 from Tools import Tools
 from EvaluatorAgent import EvaluatorAgent
 from PushOver import PushOver
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 
 
 @lru_cache()
@@ -28,6 +28,7 @@ def get_chat_service() -> Chat:
     """
     config = get_config()
     openai_client = OpenAI(api_key=config.openai_api_key)
+    async_openai_client = AsyncOpenAI(api_key=config.openai_api_key)
     me = Me(config.persona_name, config.persona_file)
     evaluator: Optional[EvaluatorAgent] = None
 
@@ -40,4 +41,11 @@ def get_chat_service() -> Chat:
     
     tools = Tools(pushover)
 
-    return Chat(me, openai_client, config.openai_model, tools, evaluator)
+    return Chat(
+        me,
+        openai_client,
+        config.openai_model,
+        tools,
+        evaluator,
+        streaming_llm=async_openai_client,
+    )
