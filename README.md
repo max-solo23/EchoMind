@@ -4,6 +4,22 @@ app_file: app.py
 sdk: gradio
 sdk_version: 5.49.1
 ---
+
+# EchoMind
+
+**EchoMind** is a personal AI chatbot application that represents you as a configurable persona in conversational interactions. It uses your profile (configured via YAML) to answer questions about your skills, experience, projects, and contact information in a natural, authentic way.
+
+## What Does It Do?
+
+- **Persona-Based Chat**: The AI acts as you, based on your persona configuration
+- **Tool Calling**: Captures interested users' contact info and logs unknown questions
+- **Quality Control**: Optional response evaluation to maintain professional, on-brand replies
+- **Dual Interface**:
+  - Gradio UI for interactive local testing
+  - FastAPI REST API for integration with portfolio websites
+- **Multi-Provider Support**: Works with OpenAI, Gemini, DeepSeek, Grok, and Ollama
+- **Streaming Responses**: Real-time token streaming via Server-Sent Events (SSE)
+
 ## Setup Instructions
 
 ```bash
@@ -86,6 +102,11 @@ Server runs at `http://localhost:8000`
 
 **POST /api/v1/chat** - Chat with AI persona (requires API key)
 
+Query Parameters:
+- `stream` (optional): Set to `true` to enable streaming response via SSE
+
+**Standard Response (default):**
+
 Request:
 ```json
 {
@@ -104,6 +125,31 @@ Response:
   "reply": "I specialize in..."
 }
 ```
+
+**Streaming Response:**
+
+Request: `POST /api/v1/chat?stream=true`
+
+Same JSON body as above. Response is Server-Sent Events (SSE) stream:
+
+```
+data: {"delta": "I", "metadata": null}
+
+data: {"delta": " specialize", "metadata": null}
+
+data: {"delta": " in...", "metadata": null}
+
+data: {"delta": null, "metadata": {"done": true}}
+
+```
+
+Event metadata may include tool call status:
+```
+data: {"delta": null, "metadata": {"tool_call": "record_user_details", "status": "executing"}}
+data: {"delta": null, "metadata": {"tool_call": "record_user_details", "status": "success"}}
+```
+
+Note: Streaming mode bypasses the evaluator for real-time responses.
 
 **GET /health** - Health check (no auth required)
 
