@@ -1,12 +1,12 @@
 from __future__ import annotations
 from config import Config
 import gradio as gr
-from openai import OpenAI, AsyncOpenAI
 from Chat import Chat
 from EvaluatorAgent import EvaluatorAgent
 from Me import Me
 from PushOver import PushOver
 from Tools import Tools
+from core.llm import create_llm_provider
 
 
 def build_pushover_client(token: str | None, user: str | None) -> PushOver | None:
@@ -20,27 +20,19 @@ def build_pushover_client(token: str | None, user: str | None) -> PushOver | Non
     return None
 
 config = Config.from_env()
-openai_client = OpenAI(api_key=config.openai_api_key)
-async_openai_client = AsyncOpenAI(api_key=config.openai_api_key)
+llm_provider = create_llm_provider(config)
 
 me = Me(config.persona_name, config.persona_file)
 
 evaluator = None
 if config.use_evaluator:
-    evaluator = EvaluatorAgent(me, openai_client, config.openai_model)
+    evaluator = EvaluatorAgent(me, llm_provider, config.llm_model)
     print("Evaluator enabled")
 else:
     print("Evaluator disabled")
     
 pushover_client = build_pushover_client(config.pushover_token, config.pushover_user)
 tools = Tools(pushover_client)
-chat = Chat(
-    me,
-    openai_client,
-    config.openai_model,
-    tools,
-    evaluator,
-    streaming_llm=async_openai_client,
-)
+chat = Chat(me, llm_provider, config.llm_model, tools, evaluator)
 
 gr.ChatInterface(chat.chat, type="messages").launch()

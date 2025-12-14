@@ -1,8 +1,7 @@
-from core.interfaces import LLMProvider
-from typing import Optional, Any, AsyncGenerator
+from core.llm.provider import LLMProvider
+from typing import Optional, AsyncGenerator
 import json
 import logging
-import inspect
 
 
 logger = logging.getLogger(__name__)
@@ -15,10 +14,8 @@ class Chat:
             llm_model: str, 
             llm_tools, 
             evaluator_llm: Optional["EvaluatorAgent"] = None,
-            streaming_llm: Any | None = None,
         ):
         self.llm = llm
-        self.streaming_llm = streaming_llm or llm
         self.llm_model = llm_model
         self.llm_tools = llm_tools
         self.person = person
@@ -35,24 +32,19 @@ class Chat:
 
         done = False
         while not done:
-            response = self.llm.chat.completions.create(
-                model=self.llm_model,
-                messages=messages,
-                tools=self.llm_tools.tools
-            )
-
-            finish_reason = response.choices[0].finish_reason
-            msg = response.choices[0].message
+            response = self.llm.complete(model=self.llm_model, messages=messages, tools=self.llm_tools.tools)
+            finish_reason = response.finish_reason
+            msg = response.message
 
             if finish_reason == "tool_calls":
                 tool_calls = msg.tool_calls
                 results = self.llm_tools.handle_tool_call(tool_calls)
-                messages.append(msg)
+                messages.append({"role": "assistant", "content": msg.content, "tool_calls": tool_calls})
                 messages.extend(results)
             else:
                 done = True
 
-        reply = msg.content
+        reply = msg.content or ""
         if self.evaluator_llm:
             evaluation = self.evaluator_llm.evaluate(reply, message, history)
 
@@ -74,8 +66,8 @@ class Chat:
                    ] + history + [
             {"role": "user", "content": message}
         ]
-        response = self.llm.chat.completions.create(model=self.llm_model, messages=messages)
-        return response.choices[0].message.content
+        response = self.llm.complete(model=self.llm_model, messages=messages)
+        return response.message.content or ""
 
     async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[bytes, None]:
         """
@@ -98,69 +90,30 @@ class Chat:
 
             done = False
             while not done:
-                maybe_stream = self.streaming_llm.chat.completions.create(
-                    model=self.llm_model,
-                    messages=messages,
-                    tools=self.llm_tools.tools,
-                    stream=True
-                )
-                stream = await maybe_stream if inspect.isawaitable(maybe_stream) else maybe_stream
-
                 tool_calls_accumulator = []
-                finish_reason = None
+                finish_reason: str | None = None
 
-                if hasattr(stream, "__aiter__"):
-                    async for chunk in stream:
-                        choice = chunk.choices[0]
-                        finish_reason = choice.finish_reason
-                        delta = choice.delta
+                async for delta in self.llm.stream(model=self.llm_model, messages=messages, tools=self.llm_tools.tools):
+                    if delta.content:
+                        event = {"delta": delta.content, "metadata": None}
+                        yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
 
-                        # Handle token content
-                        if delta.content:
-                            event = {"delta": delta.content, "metadata": None}
-                            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+                    if delta.tool_calls:
+                        for tool_call in delta.tool_calls:
+                            if len(tool_calls_accumulator) <= tool_call.index:
+                                tool_calls_accumulator.append({
+                                    "id": tool_call.id,
+                                    "type": "function",
+                                    "function": {"name": "", "arguments": ""}
+                                })
 
-                        # Handle tool calls
-                        if delta.tool_calls:
-                            for tool_call in delta.tool_calls:
-                                # Accumulate tool call chunks
-                                if len(tool_calls_accumulator) <= tool_call.index:
-                                    tool_calls_accumulator.append({
-                                        "id": tool_call.id,
-                                        "type": "function",
-                                        "function": {"name": "", "arguments": ""}
-                                    })
+                            if tool_call.name:
+                                tool_calls_accumulator[tool_call.index]["function"]["name"] = tool_call.name
+                            if tool_call.arguments:
+                                tool_calls_accumulator[tool_call.index]["function"]["arguments"] += tool_call.arguments
 
-                                if tool_call.function.name:
-                                    tool_calls_accumulator[tool_call.index]["function"]["name"] = tool_call.function.name
-                                if tool_call.function.arguments:
-                                    tool_calls_accumulator[tool_call.index]["function"]["arguments"] += tool_call.function.arguments
-                else:
-                    for chunk in stream:
-                        choice = chunk.choices[0]
-                        finish_reason = choice.finish_reason
-                        delta = choice.delta
-
-                        # Handle token content
-                        if delta.content:
-                            event = {"delta": delta.content, "metadata": None}
-                            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
-
-                        # Handle tool calls
-                        if delta.tool_calls:
-                            for tool_call in delta.tool_calls:
-                                # Accumulate tool call chunks
-                                if len(tool_calls_accumulator) <= tool_call.index:
-                                    tool_calls_accumulator.append({
-                                        "id": tool_call.id,
-                                        "type": "function",
-                                        "function": {"name": "", "arguments": ""}
-                                    })
-
-                                if tool_call.function.name:
-                                    tool_calls_accumulator[tool_call.index]["function"]["name"] = tool_call.function.name
-                                if tool_call.function.arguments:
-                                    tool_calls_accumulator[tool_call.index]["function"]["arguments"] += tool_call.function.arguments
+                    if delta.finish_reason is not None:
+                        finish_reason = delta.finish_reason
 
                 if finish_reason == "tool_calls":
                     # Execute tool calls

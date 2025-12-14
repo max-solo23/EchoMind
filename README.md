@@ -37,12 +37,27 @@ Pushover credentials are optional and only needed if you want to enable notifica
 Example `.env` content:
 
 ```
-PUSHOVER_USER=youruser
-PUSHOVER_TOKEN=yourtoken
-OPENAI_API_KEY=yourkey
-OPENAI_MODEL=gpt-5-nano
+# LLM Configuration
+LLM_PROVIDER=openai
+LLM_API_KEY=your_openai_api_key_here
+LLM_MODEL=gpt-5.2-nano
+# For OpenAI-compatible providers (DeepSeek/Grok/Ollama), set:
+# LLM_BASE_URL=http://localhost:11434/v1
+
+# Gemini example:
+# LLM_PROVIDER=gemini
+# LLM_API_KEY=your_gemini_api_key
+# LLM_MODEL=gemini-1.5-flash
+
+# Notification Service (Optional)
+PUSHOVER_USER=your_pushover_user_key
+PUSHOVER_TOKEN=your_pushover_token
+
+# Response Quality Evaluation (Optional)
 USE_EVALUATOR=false
-API_KEY=your_secret_api_key
+
+# API Configuration (Required for FastAPI)
+API_KEY=your_secret_api_key_here
 ALLOWED_ORIGINS=http://localhost:3000,https://your-portfolio.com
 ```
 Replace the placeholder values with your actual credentials before running the app.

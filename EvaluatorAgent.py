@@ -1,5 +1,6 @@
 from Evaluation import Evaluation
-from core.interfaces import LLMProvider
+from core.llm.provider import LLMProvider
+import json
 
 
 class EvaluatorAgent:
@@ -40,6 +41,28 @@ class EvaluatorAgent:
                    ] + [
             {"role": "user", "content": self.evaluator_user_prompt(reply, message, history)}
         ]
-        response = self.llm.chat.completions.parse(model=self.model, messages=messages, response_format=Evaluation)
+        try:
+            parsed = self.llm.parse(model=self.model, messages=messages, response_format=Evaluation)
+            if isinstance(parsed, Evaluation):
+                return parsed
+            if hasattr(parsed, "choices"):
+                return parsed.choices[0].message.parsed
+        except NotImplementedError:
+            pass
 
-        return response.choices[0].message.parsed
+        fallback_messages = messages + [
+            {
+                "role": "system",
+                "content": "Return ONLY valid JSON matching: {\"is_acceptable\": boolean, \"feedback\": string}",
+            }
+        ]
+        response = self.llm.complete(model=self.model, messages=fallback_messages)
+        text = (response.message.content or "").strip()
+
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            text = text[start : end + 1]
+
+        data = json.loads(text)
+        return Evaluation.model_validate(data)

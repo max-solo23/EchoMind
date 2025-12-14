@@ -7,7 +7,7 @@ from Me import Me
 from Tools import Tools
 from EvaluatorAgent import EvaluatorAgent
 from PushOver import PushOver
-from openai import OpenAI, AsyncOpenAI
+from core.llm import create_llm_provider
 
 
 @lru_cache()
@@ -27,13 +27,12 @@ def get_chat_service() -> Chat:
     Follows same dependency injection pattern as app.py.
     """
     config = get_config()
-    openai_client = OpenAI(api_key=config.openai_api_key)
-    async_openai_client = AsyncOpenAI(api_key=config.openai_api_key)
+    llm_provider = create_llm_provider(config)
     me = Me(config.persona_name, config.persona_file)
     evaluator: Optional[EvaluatorAgent] = None
 
     if config.use_evaluator:
-        evaluator = EvaluatorAgent(me, openai_client, config.openai_model)
+        evaluator = EvaluatorAgent(me, llm_provider, config.llm_model)
     pushover: Optional[PushOver] = None
 
     if config.pushover_token and config.pushover_user:
@@ -41,11 +40,4 @@ def get_chat_service() -> Chat:
     
     tools = Tools(pushover)
 
-    return Chat(
-        me,
-        openai_client,
-        config.openai_model,
-        tools,
-        evaluator,
-        streaming_llm=async_openai_client,
-    )
+    return Chat(me, llm_provider, config.llm_model, tools, evaluator)
