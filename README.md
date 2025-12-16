@@ -1,10 +1,3 @@
----
-title: EchoMind
-app_file: app.py
-sdk: gradio
-sdk_version: 5.49.1
----
-
 # EchoMind
 
 **EchoMind** is a personal AI chatbot application that represents you as a configurable persona in conversational interactions. It uses your profile (configured via YAML) to answer questions about your skills, experience, projects, and contact information in a natural, authentic way.
