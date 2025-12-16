@@ -24,7 +24,7 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8000
+    PORT=8080
 
 # Create non-root user for security
 RUN useradd -m -u 1000 echomind && \
@@ -44,11 +44,11 @@ COPY --chown=echomind:echomind . .
 USER echomind
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import os, requests; requests.get(f'http://localhost:{os.getenv(\"PORT\", \"8000\")}/health', timeout=5)"
+    CMD python -c "import os, requests; requests.get(f'http://localhost:{os.getenv(\"PORT\", \"8080\")}/health', timeout=5)"
 
 # Run the FastAPI application
-CMD ["sh", "-c", "python -m uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "python -m uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
