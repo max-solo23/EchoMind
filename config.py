@@ -17,6 +17,8 @@ class Config:
     use_evaluator: bool = False
     api_key: str = ""
     allowed_origins: list[str] = None
+    rate_limit_enabled: bool = True
+    rate_limit_per_hour: int = 15
 
     def __post_init__(self):
         if self.allowed_origins is None:
@@ -38,16 +40,22 @@ class Config:
         origins_str = os.getenv("ALLOWED_ORIGINS", "")
         allowed_origins = [o.strip() for o in origins_str.split(",") if o.strip()]
 
+        # Parse rate limiting configuration
+        rate_limit_enabled = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+        rate_limit_per_hour = int(os.getenv("RATE_LIMIT_PER_HOUR", "15"))
+
         return cls(
             llm_provider=llm_provider,
             llm_api_key=llm_key,
             llm_base_url=os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL"),
-            llm_model=os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL", "gpt-5.2-nano"),
+            llm_model=os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL", "gpt-5.2"),
             pushover_token=os.getenv("PUSHOVER_TOKEN"),
             pushover_user=os.getenv("PUSHOVER_USER"),
             persona_name="Maksym",
             persona_file="persona.yaml",
             use_evaluator=os.getenv("USE_EVALUATOR", "false").lower() == "true",
             api_key=os.getenv("API_KEY", ""),
-            allowed_origins=allowed_origins
+            allowed_origins=allowed_origins,
+            rate_limit_enabled=rate_limit_enabled,
+            rate_limit_per_hour=rate_limit_per_hour
         )

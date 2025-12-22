@@ -134,3 +134,22 @@ class GeminiProvider(LLMProvider):
 
         yield StreamDelta(content=None, tool_calls=None, finish_reason="stop")
 
+    def parse(
+        self,
+        *,
+        model: str,
+        messages: list[dict],
+        response_format: Any,
+    ) -> Any:
+        """Gemini provider does not support structured outputs via parse()."""
+        raise NotImplementedError("GeminiProvider does not support structured outputs")
+
+    @property
+    def capabilities(self) -> dict[str, bool]:
+        """Gemini has limited capabilities - no tool calling or structured outputs."""
+        return {
+            "tools": False,
+            "streaming": True,
+            "structured_output": False,
+        }
+

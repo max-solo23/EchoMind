@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 
 from api.middleware.cors import setup_cors
+from api.middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from api.routes import health, chat
 
 
@@ -11,6 +13,10 @@ app = FastAPI(
     version="1.0.0",
     redoc_url="/redoc"
 )
+
+# Configure rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 setup_cors(app)
 

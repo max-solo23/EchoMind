@@ -28,6 +28,22 @@ def get_chat_service() -> Chat:
     """
     config = get_config()
     llm_provider = create_llm_provider(config)
+
+    # Warn about provider limitations
+    if not llm_provider.capabilities.get("tools", False):
+        print(
+            f"Warning: {config.llm_provider} does not support tool calling. "
+            "record_user_details and record_unknown_question will be disabled.",
+            flush=True,
+        )
+
+    if config.use_evaluator and not llm_provider.capabilities.get("structured_output", False):
+        print(
+            f"Warning: {config.llm_provider} does not support structured outputs. "
+            "Evaluator will use JSON fallback mode.",
+            flush=True,
+        )
+
     me = Me(config.persona_name, config.persona_file)
     evaluator: Optional[EvaluatorAgent] = None
 

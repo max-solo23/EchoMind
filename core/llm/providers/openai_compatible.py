@@ -98,3 +98,12 @@ class OpenAICompatibleProvider(LLMProvider):
             response_format=response_format,
         )
 
+    @property
+    def capabilities(self) -> dict[str, bool]:
+        """OpenAI-compatible providers support all features."""
+        return {
+            "tools": True,
+            "streaming": True,
+            "structured_output": True,
+        }
+

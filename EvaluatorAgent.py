@@ -41,15 +41,22 @@ class EvaluatorAgent:
                    ] + [
             {"role": "user", "content": self.evaluator_user_prompt(reply, message, history)}
         ]
-        try:
-            parsed = self.llm.parse(model=self.model, messages=messages, response_format=Evaluation)
-            if isinstance(parsed, Evaluation):
-                return parsed
-            if hasattr(parsed, "choices"):
-                return parsed.choices[0].message.parsed
-        except NotImplementedError:
-            pass
 
+        # Check if provider supports structured output
+        supports_parse = self.llm.capabilities.get("structured_output", False)
+
+        if supports_parse:
+            try:
+                parsed = self.llm.parse(model=self.model, messages=messages, response_format=Evaluation)
+                if isinstance(parsed, Evaluation):
+                    return parsed
+                if hasattr(parsed, "choices"):
+                    return parsed.choices[0].message.parsed
+            except (NotImplementedError, AttributeError):
+                # Provider doesn't support parse, fall through to JSON extraction
+                pass
+
+        # Fallback: Use JSON extraction for providers without structured output support
         fallback_messages = messages + [
             {
                 "role": "system",

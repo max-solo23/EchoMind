@@ -8,11 +8,11 @@ logger = logging.getLogger(__name__)
 
 class Chat:
     def __init__(
-            self, 
-            person, 
-            llm: LLMProvider, 
-            llm_model: str, 
-            llm_tools, 
+            self,
+            person,
+            llm: LLMProvider,
+            llm_model: str,
+            llm_tools,
             evaluator_llm: Optional["EvaluatorAgent"] = None,
         ):
         self.llm = llm
@@ -20,6 +20,9 @@ class Chat:
         self.llm_tools = llm_tools
         self.person = person
         self.evaluator_llm = evaluator_llm
+
+        # Check if provider supports tools
+        self.supports_tools = llm.capabilities.get("tools", False)
 
     def chat(self, message: str, history: list[dict]) -> str:
         person_system_prompt = self.person.system_prompt
@@ -32,7 +35,9 @@ class Chat:
 
         done = False
         while not done:
-            response = self.llm.complete(model=self.llm_model, messages=messages, tools=self.llm_tools.tools)
+            # Only pass tools if provider supports them
+            tools = self.llm_tools.tools if self.supports_tools else None
+            response = self.llm.complete(model=self.llm_model, messages=messages, tools=tools)
             finish_reason = response.finish_reason
             msg = response.message
 
@@ -93,7 +98,9 @@ class Chat:
                 tool_calls_accumulator = []
                 finish_reason: str | None = None
 
-                async for delta in self.llm.stream(model=self.llm_model, messages=messages, tools=self.llm_tools.tools):
+                # Only pass tools if provider supports them
+                tools = self.llm_tools.tools if self.supports_tools else None
+                async for delta in self.llm.stream(model=self.llm_model, messages=messages, tools=tools):
                     if delta.content:
                         event = {"delta": delta.content, "metadata": None}
                         yield f"data: {json.dumps(event)}\n\n".encode("utf-8")

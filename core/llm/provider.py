@@ -43,3 +43,23 @@ class LLMProvider(Protocol):
         """
         raise NotImplementedError
 
+    @property
+    def capabilities(self) -> dict[str, bool]:
+        """
+        Return provider capabilities.
+
+        Default implementation assumes full support.
+        Providers with limitations should override this.
+
+        Returns:
+            dict with capability flags:
+            - "tools": Supports function/tool calling
+            - "streaming": Supports streaming responses
+            - "structured_output": Supports structured output via parse()
+        """
+        return {
+            "tools": True,
+            "streaming": True,
+            "structured_output": True,
+        }
+

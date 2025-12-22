@@ -49,14 +49,47 @@ Example `.env` content:
 # LLM Configuration
 LLM_PROVIDER=openai
 LLM_API_KEY=your_openai_api_key_here
-LLM_MODEL=gpt-5.2-nano
-# For OpenAI-compatible providers (DeepSeek/Grok/Ollama), set:
-# LLM_BASE_URL=http://localhost:11434/v1
+LLM_MODEL=gpt-5.2
+
+# OpenAI other models:
+# LLM_MODEL=gpt-5-mini  # Smaller, faster variant
+# LLM_MODEL=gpt-4o      # Still available via API
+# LLM_MODEL=gpt-5.1     # Previous version
 
 # Gemini example:
 # LLM_PROVIDER=gemini
 # LLM_API_KEY=your_gemini_api_key
-# LLM_MODEL=gemini-1.5-flash
+# LLM_MODEL=gemini-3-flash
+
+# Gemini other models:
+# LLM_MODEL=gemini-2.0-flash
+# LLM_MODEL=gemini-2.0-flash-lite
+# LLM_MODEL=gemini-2.0-pro
+
+# DeepSeek example:
+# LLM_PROVIDER=openai
+# LLM_API_KEY=your_deepseek_api_key
+# LLM_MODEL=deepseek-chat
+# LLM_BASE_URL=https://api.deepseek.com/v1
+
+# DeepSeek reasoning model:
+# LLM_MODEL=deepseek-reasoner  # For complex reasoning tasks
+
+# xAI Grok example:
+# LLM_PROVIDER=openai
+# LLM_API_KEY=your_xai_api_key
+# LLM_MODEL=grok-4-1-fast-reasoning
+# LLM_BASE_URL=https://api.x.ai/v1
+
+# Grok other models:
+# LLM_MODEL=grok-4
+# LLM_MODEL=grok-3-mini  # Smaller, faster variant
+
+# Ollama example (local):
+# LLM_PROVIDER=openai
+# LLM_API_KEY=ollama
+# LLM_MODEL=llama3.2
+# LLM_BASE_URL=http://localhost:11434/v1
 
 # Notification Service (Optional)
 PUSHOVER_USER=your_pushover_user_key
@@ -68,6 +101,10 @@ USE_EVALUATOR=false
 # API Configuration (Required for FastAPI)
 API_KEY=your_secret_api_key_here
 ALLOWED_ORIGINS=http://localhost:3000,https://your-portfolio.com
+
+# Rate Limiting (Optional)
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_HOUR=15
 ```
 Replace the placeholder values with your actual credentials before running the app.
 
@@ -147,3 +184,41 @@ Note: Streaming mode bypasses the evaluator for real-time responses.
 **GET /health** - Health check (no auth required)
 
 **GET /docs** - Interactive API documentation
+
+### Rate Limiting
+
+The API implements IP-based rate limiting to prevent abuse:
+
+- **Default Limit**: 15 requests per hour per IP address
+- **Applies To**: `/api/v1/chat` endpoint (both streaming and non-streaming)
+- **Exempt Endpoints**: `/health`, `/` (root), `/docs`
+- **Configuration**: Set via environment variables
+
+When the rate limit is exceeded, the API returns:
+
+```json
+{
+  "error": "Rate limit exceeded",
+  "detail": "You have exceeded the request limit. Please try again later.",
+  "retry_after": "3600"
+}
+```
+
+HTTP Status: `429 Too Many Requests`
+Header: `Retry-After: 3600` (seconds until limit resets)
+
+**Configuration Options:**
+
+```bash
+# Disable rate limiting (for testing)
+RATE_LIMIT_ENABLED=false
+
+# Adjust limit (default: 15)
+RATE_LIMIT_PER_HOUR=30
+```
+
+**Notes:**
+- Rate limits apply equally to all users (authenticated or not)
+- Limits are tracked per IP address using `X-Forwarded-For` header when behind a proxy
+- Limits reset on server restart (in-memory storage)
+- Health checks and documentation endpoints are never rate limited

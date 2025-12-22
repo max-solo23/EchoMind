@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse
 from typing import Annotated
 
 from models.requests import ChatRequest
 from models.responses import ChatResponse
 from api.middleware.auth import verify_api_key
+from api.middleware.rate_limit import limiter
 from api.dependencies import get_chat_service
 from Chat import Chat
 
@@ -12,8 +13,10 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 
 @router.post("/chat", dependencies=[Depends(verify_api_key)])
+@limiter.limit("15/hour")
 async def chat_endpoint(
-    request: ChatRequest,
+    request: Request,
+    chat_request: ChatRequest,
     chat_service: Annotated[Chat, Depends(get_chat_service)],
     stream: bool = Query(False, description="Enable streaming response (SSE)")
 ):
@@ -26,7 +29,7 @@ async def chat_endpoint(
     try:
         if stream:
             return StreamingResponse(
-                chat_service.chat_stream(request.message, request.history),
+                chat_service.chat_stream(chat_request.message, chat_request.history),
                 media_type="text/event-stream",
                 headers={
                     "Cache-Control": "no-cache, no-transform",
@@ -36,7 +39,7 @@ async def chat_endpoint(
             )
         else:
             # Non-streaming mode (existing behavior)
-            reply = chat_service.chat(request.message, request.history)
+            reply = chat_service.chat(chat_request.message, chat_request.history)
             return ChatResponse(reply=reply)
     except Exception as e:
         print(f"Chat error: {e}")
