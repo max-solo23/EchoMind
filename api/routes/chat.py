@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 
 @router.post("/chat", dependencies=[Depends(verify_api_key)])
-@limiter.limit("15/hour")
+@limiter.limit("10/hour")
 async def chat_endpoint(
     request: Request,
     chat_request: ChatRequest,

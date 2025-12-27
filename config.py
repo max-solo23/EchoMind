@@ -42,7 +42,7 @@ class Config:
 
         # Parse rate limiting configuration
         rate_limit_enabled = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
-        rate_limit_per_hour = int(os.getenv("RATE_LIMIT_PER_HOUR", "15"))
+        rate_limit_per_hour = int(os.getenv("RATE_LIMIT_PER_HOUR", "10"))
 
         return cls(
             llm_provider=llm_provider,
