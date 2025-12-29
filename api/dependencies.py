@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, AsyncGenerator
 
 from config import Config
 from Chat import Chat
@@ -8,6 +8,13 @@ from Tools import Tools
 from EvaluatorAgent import EvaluatorAgent
 from PushOver import PushOver
 from core.llm import create_llm_provider
+from database import get_session
+from sqlalchemy.ext.asyncio import AsyncSession
+from repositories.conversation_repo import SQLAlchemyConversationRepository
+from repositories.cache_repo import SQLAlchemyCacheRepository
+from services.similarity_service import SimilarityService
+from services.cache_service import CacheService
+from services.conversation_logger import ConversationLogger
 
 
 @lru_cache()
@@ -57,3 +64,54 @@ def get_chat_service() -> Chat:
     tools = Tools(pushover)
 
     return Chat(me, llm_provider, config.llm_model, tools, evaluator)
+
+
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    FastAPI dependency for database sessions.
+
+    Usage:
+        @router.get("/example")
+        async def example(session: AsyncSession = Depends(get_db_session)):
+            ...
+
+    Yields:
+        AsyncSession: Database session (auto-closed after request)
+    """
+    config = get_config()
+
+    if not config.database_url:
+        raise RuntimeError("Database not configured")
+
+    async with get_session(config) as session:
+        yield session
+
+
+async def get_conversation_logger(
+    session: AsyncSession
+) -> ConversationLogger:
+    """
+    Create ConversationLogger with all dependencies.
+
+    Args:
+        session: Database session from get_db_session
+
+    Returns:
+        Configured ConversationLogger
+    """
+    conversation_repo = SQLAlchemyConversationRepository(session)
+    cache_repo = SQLAlchemyCacheRepository(session)
+    similarity_service = SimilarityService(threshold=0.90)
+    cache_service = CacheService(cache_repo, similarity_service)
+
+    return ConversationLogger(
+        conversation_repo=conversation_repo,
+        cache_service=cache_service,
+        enable_caching=True
+    )
+
+
+def is_database_configured() -> bool:
+    """Check if database is configured."""
+    config = get_config()
+    return config.database_url is not None

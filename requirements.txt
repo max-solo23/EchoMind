@@ -90,6 +90,7 @@ rich==14.2.0
 rpds-py==0.30.0
 rsa==4.9.1
 ruff==0.14.1
+scikit-learn==1.6.1
 safehttpx==0.1.6
 semantic-version==2.10.0
 sendgrid==6.12.5
