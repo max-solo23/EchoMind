@@ -7,11 +7,15 @@ Personal AI chatbot that embodies a configurable persona for portfolio websites 
 - **Persona System** - Define personality, background, and expertise via YAML configuration
 - **Multi-Provider LLM Support** - OpenAI, Gemini, and OpenAI-compatible APIs (DeepSeek, Grok, etc.)
 - **REST API** - FastAPI server with streaming support (SSE)
-- **Gradio UI** - Interactive demo interface
+- **Dynamic Rate Limiting** - Configurable rate limits (toggle on/off via admin API without restart)
+- **Message Validation** - Filters gibberish and invalid input with user-friendly error messages
 - **Context-Aware Caching** - Intelligent response caching with TTL to reduce API costs
+- **Conversation Logging** - PostgreSQL-backed session and conversation tracking
 - **Quality Evaluation** - Optional response quality control via evaluator agent
+- **Graceful Error Handling** - User-friendly messages for LLM errors (rate limits, timeouts, etc.)
 - **Tool Calling** - Capture user contact info, log unknown questions
 - **Push Notifications** - Alerts via Pushover when users engage
+- **Admin Dashboard** - Endpoints for cache management, session control, and rate limit configuration
 
 ## Quick Start
 
@@ -62,6 +66,10 @@ PUSHOVER_USER=your-user-key
 API_KEY=your-api-key
 ALLOWED_ORIGINS=https://yoursite.com,http://localhost:3000
 
+# Rate Limiting (configurable via admin API)
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_HOUR=10
+
 # Optional - Database (enables caching & logging)
 POSTGRES_URL=postgresql+asyncpg://user:pass@host:5432/echomind
 ```
@@ -107,18 +115,62 @@ curl -X POST "https://your-api/api/v1/chat?stream=true" \
 ### Admin
 
 ```bash
-# Cache stats
+# Health check
+GET /health
+
+# Cache management
 GET /api/v1/admin/cache/stats
-
-# List cache entries
-GET /api/v1/admin/cache/entries?page=1&limit=20
-
-# Clear expired cache
+GET /api/v1/admin/cache/entries?page=1&limit=20&sort_by=created_at
 POST /api/v1/admin/cache/cleanup
 
-# Health check
-GET /api/v1/admin/health
+# Session management
+GET /api/v1/admin/sessions?page=1&limit=20
+DELETE /api/v1/admin/sessions/{session_id}
+DELETE /api/v1/admin/sessions
+
+# Rate limiting (dynamic configuration)
+GET /api/v1/admin/rate-limit
+POST /api/v1/admin/rate-limit \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "rate_per_hour": 15}'
 ```
+
+## Rate Limiting
+
+Dynamic, runtime-configurable rate limiting via admin API:
+
+- **Default Limit** - 10 requests/hour per IP address
+- **Dynamic Configuration** - Toggle on/off or change rate without server restart
+- **Admin Control** - `POST /api/v1/admin/rate-limit` to update settings
+- **Thread-Safe** - Uses locking for concurrent access safety
+- **User-Friendly Errors** - 429 responses include retry-after information
+
+**Example: Disable rate limiting**
+```bash
+curl -X POST https://your-api/api/v1/admin/rate-limit \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+```
+
+## Message Validation
+
+EchoMind filters invalid and gibberish input:
+
+- **Length Check** - Rejects messages < 3 characters
+- **Alphabetic Ratio** - Requires ≥30% alphabetic characters (prevents keyboard mashing)
+- **Multi-language Support** - Recognizes Latin, Cyrillic, and accented characters
+- **User-Friendly Errors** - Returns 400 Bad Request with clear error messages
+
+## Error Handling
+
+Graceful handling of LLM API errors with user-friendly messages:
+
+- **Rate Limit Errors** - "I'm experiencing high demand right now. Please try again in a moment."
+- **Timeout Errors** - "I'm taking longer than expected to respond. Please try again."
+- **Connection Errors** - "I'm having trouble connecting to my AI service. Please try again shortly."
+- **Generic API Errors** - Fallback messages with proper error logging
 
 ## Caching System
 
@@ -160,9 +212,10 @@ EchoMind/
 │   │   ├── admin.py       # Admin endpoints
 │   │   └── health.py      # Health check endpoint
 │   └── middleware/
-│       ├── auth.py        # API key authentication
-│       ├── cors.py        # CORS configuration
-│       └── rate_limit.py  # Rate limiting (10/hour)
+│       ├── auth.py            # API key authentication
+│       ├── cors.py            # CORS configuration
+│       ├── rate_limit.py      # Rate limiting middleware
+│       └── rate_limit_state.py # Dynamic rate limit state manager
 ├── services/
 │   ├── cache_service.py   # Context-aware caching
 │   ├── conversation_logger.py
@@ -202,6 +255,38 @@ alembic upgrade head
 # Create new migration
 alembic revision -m "description"
 ```
+
+## Deployment
+
+EchoMind is designed for deployment on Fly.io with PostgreSQL:
+
+```bash
+# Deploy to Fly.io
+fly deploy
+
+# View logs
+fly logs
+
+# Check status
+fly status
+
+# Open app
+fly open
+```
+
+**Environment Setup:**
+- Set all environment variables via `fly secrets set KEY=value`
+- Attach PostgreSQL database via Fly.io Postgres
+- Configure `ALLOWED_ORIGINS` with your frontend domain
+- Set `PORT` to 8080 (Fly.io default)
+
+**Production Checklist:**
+- ✅ Database migrations applied (`alembic upgrade head`)
+- ✅ API key configured and secure
+- ✅ Rate limiting enabled
+- ✅ CORS origins restricted to your domain
+- ✅ PostgreSQL database attached
+- ✅ Environment secrets set (not committed to git)
 
 ## License
 
