@@ -6,6 +6,5 @@ __pycache__/
 *.py[cod]
 .github
 .claude
-docs
 memory-tool.db
 CLAUDE.md
