@@ -182,6 +182,16 @@ class CleanupExpiredResponse(BaseModel):
     deleted_count: int
 
 
+class DeleteSessionResponse(BaseModel):
+    success: bool
+    session_id: str
+
+
+class ClearSessionsResponse(BaseModel):
+    success: bool
+    deleted_count: int
+
+
 def require_database():
     """Dependency that ensures database is configured."""
     if not is_database_configured():
@@ -333,6 +343,57 @@ async def list_sessions(
         limit=result["limit"],
         total_pages=result["total_pages"]
     )
+
+
+@router.delete(
+    "/sessions/{session_id}",
+    response_model=DeleteSessionResponse,
+    dependencies=[Depends(require_database)]
+)
+async def delete_session(
+    session_id: str,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Delete a session and all its conversations.
+
+    Args:
+        session_id: The session identifier string
+
+    Returns:
+        Success status with deleted session ID
+    """
+    logger = await get_conversation_logger(session)
+    success = await logger.delete_session(session_id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session '{session_id}' not found"
+        )
+
+    return DeleteSessionResponse(success=True, session_id=session_id)
+
+
+@router.delete(
+    "/sessions",
+    response_model=ClearSessionsResponse,
+    dependencies=[Depends(require_database)]
+)
+async def clear_all_sessions(
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Delete all sessions and their conversations.
+
+    Use with caution - this will delete all session history.
+
+    Returns:
+        Success status with count of deleted sessions
+    """
+    logger = await get_conversation_logger(session)
+    deleted = await logger.clear_all_sessions()
+    return ClearSessionsResponse(success=True, deleted_count=deleted)
 
 
 @router.get(

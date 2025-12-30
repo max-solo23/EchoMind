@@ -161,3 +161,41 @@ class SQLAlchemyConversationRepository:
             "limit": limit,
             "total_pages": (total + limit - 1) // limit if total else 0
         }
+
+    async def delete_session(self, session_id: str) -> bool:
+        """
+        Delete a session and all its conversations.
+
+        Args:
+            session_id: Session identifier string
+
+        Returns:
+            True if session was deleted, False if not found
+        """
+        result = await self.session.execute(
+            select(Session).where(Session.session_id == session_id)
+        )
+        session_obj = result.scalar_one_or_none()
+
+        if not session_obj:
+            return False
+
+        await self.session.delete(session_obj)
+        await self.session.commit()
+        return True
+
+    async def clear_all_sessions(self) -> int:
+        """
+        Delete all sessions and their conversations.
+
+        Returns:
+            Number of sessions deleted
+        """
+        result = await self.session.execute(select(func.count(Session.id)))
+        count = result.scalar()
+
+        await self.session.execute(
+            Session.__table__.delete()
+        )
+        await self.session.commit()
+        return count

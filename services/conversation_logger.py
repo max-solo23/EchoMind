@@ -231,3 +231,24 @@ class ConversationLogger:
     async def search_cache(self, query: str, limit: int = 20) -> list[dict]:
         """Search cache entries by question text."""
         return await self.cache_service.search_cache(query, limit)
+
+    async def delete_session(self, session_id: str) -> bool:
+        """
+        Delete a session and all its conversations.
+
+        Args:
+            session_id: Session identifier string
+
+        Returns:
+            True if deleted, False if not found
+        """
+        return await self.conversation_repo.delete_session(session_id)
+
+    async def clear_all_sessions(self) -> int:
+        """
+        Delete all sessions and their conversations.
+
+        Returns:
+            Number of sessions deleted
+        """
+        return await self.conversation_repo.clear_all_sessions()

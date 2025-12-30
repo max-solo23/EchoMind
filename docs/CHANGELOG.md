@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Released]
 
+## [2.1.0] - 2025-12-30
+
+### Added
+- **Delete session endpoint**: `DELETE /api/v1/admin/sessions/{session_id}` to delete a single session and its conversations
+- **Clear all sessions endpoint**: `DELETE /api/v1/admin/sessions` to delete all sessions
+
+---
+
 ## [2.0.0] - 2025-12-30
 
 ### Added
