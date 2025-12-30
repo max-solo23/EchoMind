@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Released]
 
+## [2.3.1] - 2025-12-30
+
+### Fixed
+- **Clear all sessions endpoint**: Fixed foreign key constraint violation when deleting all sessions
+  - Now deletes conversations before sessions to avoid constraint errors
+  - Prevents `IntegrityError: violates foreign key constraint "conversations_session_id_fkey"`
+
+---
+
 ## [2.3.0] - 2025-12-30
 
 ### Added

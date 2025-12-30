@@ -188,14 +188,24 @@ class SQLAlchemyConversationRepository:
         """
         Delete all sessions and their conversations.
 
+        Deletes conversations first to avoid foreign key constraint violations.
+
         Returns:
             Number of sessions deleted
         """
+        # Count sessions before deletion
         result = await self.session.execute(select(func.count(Session.id)))
         count = result.scalar()
 
+        # Delete conversations first (they reference sessions)
+        await self.session.execute(
+            Conversation.__table__.delete()
+        )
+
+        # Then delete sessions
         await self.session.execute(
             Session.__table__.delete()
         )
+
         await self.session.commit()
         return count
