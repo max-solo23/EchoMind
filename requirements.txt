@@ -71,3 +71,4 @@ urllib3==2.5.0
 uvicorn==0.37.0
 websockets==15.0.1
 wrapt==2.0.1
+scikit-learn==1.6.1
