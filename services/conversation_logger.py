@@ -153,3 +153,41 @@ class ConversationLogger:
             Number of entries deleted
         """
         return await self.cache_service.clear_cache()
+
+    # New admin methods for frontend
+
+    async def list_sessions(
+        self,
+        page: int = 1,
+        limit: int = 20,
+        sort_by: str = "created_at",
+        order: str = "desc"
+    ) -> dict:
+        """List all sessions with pagination."""
+        return await self.conversation_repo.list_sessions(page, limit, sort_by, order)
+
+    async def list_cache_entries(
+        self,
+        page: int = 1,
+        limit: int = 20,
+        sort_by: str = "last_used",
+        order: str = "desc"
+    ) -> dict:
+        """List cache entries with pagination."""
+        return await self.cache_service.list_cache_entries(page, limit, sort_by, order)
+
+    async def get_cache_entry(self, cache_id: int) -> Optional[dict]:
+        """Get single cache entry by ID."""
+        return await self.cache_service.get_cache_by_id(cache_id)
+
+    async def delete_cache_entry(self, cache_id: int) -> bool:
+        """Delete single cache entry by ID."""
+        return await self.cache_service.delete_cache_by_id(cache_id)
+
+    async def update_cache_entry(self, cache_id: int, variations: list[str]) -> bool:
+        """Update cache entry variations."""
+        return await self.cache_service.update_cache_variations(cache_id, variations)
+
+    async def search_cache(self, query: str, limit: int = 20) -> list[dict]:
+        """Search cache entries by question text."""
+        return await self.cache_service.search_cache(query, limit)

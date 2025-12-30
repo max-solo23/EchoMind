@@ -9,7 +9,7 @@ Learning notes:
 
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, desc
 from sqlalchemy.orm import selectinload
 from models.models import Session, Conversation
 import json
@@ -104,4 +104,60 @@ class SQLAlchemyConversationRepository:
                 }
                 for conv in session.conversations
             ]
+        }
+
+    async def list_sessions(
+        self,
+        page: int = 1,
+        limit: int = 20,
+        sort_by: str = "created_at",
+        order: str = "desc"
+    ) -> dict:
+        """
+        List all sessions with pagination.
+
+        Returns dict with sessions list and pagination info.
+        """
+        offset = (page - 1) * limit
+
+        # Get total count
+        count_result = await self.session.execute(select(func.count(Session.id)))
+        total = count_result.scalar()
+
+        # Build query with sorting
+        query = select(Session).options(selectinload(Session.conversations))
+
+        if sort_by == "created_at":
+            sort_col = Session.created_at
+        elif sort_by == "last_activity":
+            sort_col = Session.last_activity
+        else:
+            sort_col = Session.created_at
+
+        if order == "desc":
+            query = query.order_by(desc(sort_col))
+        else:
+            query = query.order_by(sort_col)
+
+        query = query.offset(offset).limit(limit)
+
+        result = await self.session.execute(query)
+        sessions = result.scalars().all()
+
+        return {
+            "sessions": [
+                {
+                    "id": s.id,
+                    "session_id": s.session_id,
+                    "user_ip": s.user_ip,
+                    "created_at": s.created_at,
+                    "last_activity": s.last_activity,
+                    "message_count": len(s.conversations)
+                }
+                for s in sessions
+            ],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit if total else 0
         }

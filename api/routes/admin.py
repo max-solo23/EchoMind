@@ -9,11 +9,12 @@ Provides endpoints for:
 All admin endpoints require API key authentication.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+from enum import Enum
 
 from api.middleware.auth import verify_api_key
 from api.dependencies import (
@@ -67,6 +68,96 @@ class AdminHealthResponse(BaseModel):
     status: str
     database: DatabaseStatus
     cache: Optional[CacheStats] = None
+
+
+# New response models for pagination
+
+class SessionSummary(BaseModel):
+    id: int
+    session_id: str
+    user_ip: Optional[str]
+    created_at: datetime
+    last_activity: Optional[datetime]
+    message_count: int
+
+
+class SessionListResponse(BaseModel):
+    sessions: list[SessionSummary]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+
+
+class CacheEntry(BaseModel):
+    id: int
+    question: str
+    variations: list[str]
+    variation_index: int
+    hit_count: int
+    created_at: Optional[datetime]
+    last_used: Optional[datetime]
+
+
+class CacheEntryDetail(BaseModel):
+    id: int
+    question: str
+    tfidf_vector: Optional[str]
+    variations: list[str]
+    variation_index: int
+    hit_count: int
+    created_at: Optional[datetime]
+    last_used: Optional[datetime]
+
+
+class CacheListResponse(BaseModel):
+    entries: list[CacheEntry]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+
+
+class CacheSearchResult(BaseModel):
+    id: int
+    question: str
+    hit_count: int
+    last_used: Optional[datetime]
+
+
+class CacheSearchResponse(BaseModel):
+    results: list[CacheSearchResult]
+    total: int
+
+
+class UpdateCacheRequest(BaseModel):
+    variations: list[str] = Field(..., min_length=1, max_length=3)
+
+
+class DeleteCacheResponse(BaseModel):
+    success: bool
+    deleted_id: int
+
+
+class UpdateCacheResponse(BaseModel):
+    success: bool
+    updated_at: datetime
+
+
+class SortOrder(str, Enum):
+    asc = "asc"
+    desc = "desc"
+
+
+class SessionSortBy(str, Enum):
+    created_at = "created_at"
+    last_activity = "last_activity"
+
+
+class CacheSortBy(str, Enum):
+    hit_count = "hit_count"
+    created_at = "created_at"
+    last_used = "last_used"
 
 
 def require_database():
@@ -188,4 +279,171 @@ async def get_session_history(
             ConversationItem(**conv)
             for conv in history["conversations"]
         ]
+    )
+
+
+# ============= NEW ENDPOINTS =============
+
+@router.get(
+    "/sessions",
+    response_model=SessionListResponse,
+    dependencies=[Depends(require_database)]
+)
+async def list_sessions(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    sort_by: SessionSortBy = Query(SessionSortBy.created_at, description="Sort field"),
+    order: SortOrder = Query(SortOrder.desc, description="Sort order"),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    List all sessions with pagination.
+
+    Supports sorting by created_at or last_activity.
+    """
+    logger = await get_conversation_logger(session)
+    result = await logger.list_sessions(page, limit, sort_by.value, order.value)
+
+    return SessionListResponse(
+        sessions=[SessionSummary(**s) for s in result["sessions"]],
+        total=result["total"],
+        page=result["page"],
+        limit=result["limit"],
+        total_pages=result["total_pages"]
+    )
+
+
+@router.get(
+    "/cache/entries",
+    response_model=CacheListResponse,
+    dependencies=[Depends(require_database)]
+)
+async def list_cache_entries(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    sort_by: CacheSortBy = Query(CacheSortBy.last_used, description="Sort field"),
+    order: SortOrder = Query(SortOrder.desc, description="Sort order"),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    List all cache entries with pagination.
+
+    Supports sorting by hit_count, created_at, or last_used.
+    """
+    logger = await get_conversation_logger(session)
+    result = await logger.list_cache_entries(page, limit, sort_by.value, order.value)
+
+    return CacheListResponse(
+        entries=[CacheEntry(**e) for e in result["entries"]],
+        total=result["total"],
+        page=result["page"],
+        limit=result["limit"],
+        total_pages=result["total_pages"]
+    )
+
+
+@router.get(
+    "/cache/search",
+    response_model=CacheSearchResponse,
+    dependencies=[Depends(require_database)]
+)
+async def search_cache(
+    q: str = Query(..., min_length=1, description="Search query"),
+    limit: int = Query(20, ge=1, le=100, description="Max results"),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Search cache entries by question text.
+
+    Case-insensitive partial match.
+    """
+    logger = await get_conversation_logger(session)
+    results = await logger.search_cache(q, limit)
+
+    return CacheSearchResponse(
+        results=[CacheSearchResult(**r) for r in results],
+        total=len(results)
+    )
+
+
+@router.get(
+    "/cache/{cache_id}",
+    response_model=CacheEntryDetail,
+    dependencies=[Depends(require_database)]
+)
+async def get_cache_entry(
+    cache_id: int,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Get single cache entry by ID.
+
+    Returns full details including TF-IDF vector.
+    """
+    logger = await get_conversation_logger(session)
+    entry = await logger.get_cache_entry(cache_id)
+
+    if not entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cache entry {cache_id} not found"
+        )
+
+    return CacheEntryDetail(**entry)
+
+
+@router.put(
+    "/cache/{cache_id}",
+    response_model=UpdateCacheResponse,
+    dependencies=[Depends(require_database)]
+)
+async def update_cache_entry(
+    cache_id: int,
+    request: UpdateCacheRequest,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Update cache entry variations.
+
+    Accepts 1-3 variations. Resets rotation index to 0.
+    """
+    logger = await get_conversation_logger(session)
+    success = await logger.update_cache_entry(cache_id, request.variations)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cache entry {cache_id} not found"
+        )
+
+    return UpdateCacheResponse(
+        success=True,
+        updated_at=datetime.utcnow()
+    )
+
+
+@router.delete(
+    "/cache/{cache_id}",
+    response_model=DeleteCacheResponse,
+    dependencies=[Depends(require_database)]
+)
+async def delete_cache_entry(
+    cache_id: int,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Delete single cache entry by ID.
+    """
+    logger = await get_conversation_logger(session)
+    success = await logger.delete_cache_entry(cache_id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cache entry {cache_id} not found"
+        )
+
+    return DeleteCacheResponse(
+        success=True,
+        deleted_id=cache_id
     )

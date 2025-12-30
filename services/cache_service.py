@@ -152,3 +152,31 @@ class CacheService:
             "total_variations": total_variations,
             "avg_variations_per_question": total_variations / total_questions if total_questions > 0 else 0
         }
+
+    # New admin methods
+
+    async def list_cache_entries(
+        self,
+        page: int = 1,
+        limit: int = 20,
+        sort_by: str = "last_used",
+        order: str = "desc"
+    ) -> dict:
+        """List cache entries with pagination."""
+        return await self.cache_repo.list_cache_entries(page, limit, sort_by, order)
+
+    async def get_cache_by_id(self, cache_id: int) -> Optional[dict]:
+        """Get single cache entry by ID."""
+        return await self.cache_repo.get_cache_by_id(cache_id)
+
+    async def delete_cache_by_id(self, cache_id: int) -> bool:
+        """Delete single cache entry by ID."""
+        return await self.cache_repo.delete_cache_by_id(cache_id)
+
+    async def update_cache_variations(self, cache_id: int, variations: list[str]) -> bool:
+        """Update cache entry variations."""
+        return await self.cache_repo.update_cache_variations(cache_id, variations)
+
+    async def search_cache(self, query: str, limit: int = 20) -> list[dict]:
+        """Search cache entries by question text."""
+        return await self.cache_repo.search_cache(query, limit)

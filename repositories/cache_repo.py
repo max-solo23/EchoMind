@@ -2,7 +2,7 @@
 
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func, desc
 from models.models import CachedAnswer
 import json
 from datetime import datetime
@@ -119,3 +119,131 @@ class SQLAlchemyCacheRepository:
         await self.session.commit()
 
         return result.rowcount
+
+    async def list_cache_entries(
+        self,
+        page: int = 1,
+        limit: int = 20,
+        sort_by: str = "last_used",
+        order: str = "desc"
+    ) -> dict:
+        """List cache entries with pagination."""
+
+        offset = (page - 1) * limit
+
+        # Get total count
+        count_result = await self.session.execute(select(func.count(CachedAnswer.id)))
+        total = count_result.scalar()
+
+        # Build query with sorting
+        query = select(CachedAnswer)
+
+        if sort_by == "hit_count":
+            sort_col = CachedAnswer.hit_count
+        elif sort_by == "created_at":
+            sort_col = CachedAnswer.created_at
+        elif sort_by == "last_used":
+            sort_col = CachedAnswer.last_used
+        else:
+            sort_col = CachedAnswer.last_used
+
+        if order == "desc":
+            query = query.order_by(desc(sort_col).nulls_last())
+        else:
+            query = query.order_by(sort_col.nulls_last())
+
+        query = query.offset(offset).limit(limit)
+
+        result = await self.session.execute(query)
+        caches = result.scalars().all()
+
+        return {
+            "entries": [
+                {
+                    "id": c.id,
+                    "question": c.question,
+                    "variations": json.loads(c.variations),
+                    "variation_index": c.variation_index,
+                    "hit_count": c.hit_count,
+                    "created_at": c.created_at,
+                    "last_used": c.last_used
+                }
+                for c in caches
+            ],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit if total else 0
+        }
+
+    async def get_cache_by_id(self, cache_id: int) -> Optional[dict]:
+        """Get single cache entry by ID."""
+
+        result = await self.session.execute(
+            select(CachedAnswer).where(CachedAnswer.id == cache_id)
+        )
+        cache = result.scalar_one_or_none()
+
+        if not cache:
+            return None
+
+        return {
+            "id": cache.id,
+            "question": cache.question,
+            "tfidf_vector": cache.tfidf_vector,
+            "variations": json.loads(cache.variations),
+            "variation_index": cache.variation_index,
+            "hit_count": cache.hit_count,
+            "created_at": cache.created_at,
+            "last_used": cache.last_used
+        }
+
+    async def delete_cache_by_id(self, cache_id: int) -> bool:
+        """Delete single cache entry by ID."""
+
+        result = await self.session.execute(
+            delete(CachedAnswer).where(CachedAnswer.id == cache_id)
+        )
+        await self.session.commit()
+
+        return result.rowcount > 0
+
+    async def update_cache_variations(self, cache_id: int, variations: list[str]) -> bool:
+        """Update cache variations (max 3)."""
+
+        result = await self.session.execute(
+            select(CachedAnswer).where(CachedAnswer.id == cache_id)
+        )
+        cache = result.scalar_one_or_none()
+
+        if not cache:
+            return False
+
+        # Enforce max 3 variations
+        variations = variations[:3]
+        cache.variations = json.dumps(variations)
+        cache.variation_index = 0  # Reset rotation
+
+        await self.session.commit()
+        return True
+
+    async def search_cache(self, query: str, limit: int = 20) -> list[dict]:
+        """Search cache entries by question text (case-insensitive)."""
+
+        result = await self.session.execute(
+            select(CachedAnswer)
+            .where(CachedAnswer.question.ilike(f"%{query}%"))
+            .order_by(desc(CachedAnswer.hit_count))
+            .limit(limit)
+        )
+        caches = result.scalars().all()
+
+        return [
+            {
+                "id": c.id,
+                "question": c.question,
+                "hit_count": c.hit_count,
+                "last_used": c.last_used
+            }
+            for c in caches
+        ]
