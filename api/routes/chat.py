@@ -10,6 +10,7 @@ from models.requests import ChatRequest
 from models.responses import ChatResponse
 from api.middleware.auth import verify_api_key
 from api.middleware.rate_limit import limiter
+from api.middleware.rate_limit_state import rate_limit_state
 from api.dependencies import (
     get_chat_service,
     get_db_session,
@@ -17,7 +18,7 @@ from api.dependencies import (
     is_database_configured,
     get_config,
 )
-from Chat import Chat
+from Chat import Chat, InvalidMessageError
 from services.conversation_logger import ConversationLogger
 
 logger = logging.getLogger(__name__)
@@ -49,8 +50,19 @@ def extract_last_assistant_message(history: list[dict]) -> Optional[str]:
     return None
 
 
+def get_rate_limit() -> str:
+    """
+    Returns the rate limit string based on configuration.
+
+    If rate limiting is disabled, returns a very high limit effectively disabling it.
+    """
+    if rate_limit_state.enabled:
+        return f"{rate_limit_state.rate_per_hour}/hour"
+    return "1000000/hour"  # Effectively unlimited when disabled
+
+
 @router.post("/chat", dependencies=[Depends(verify_api_key)])
-@limiter.limit("10/hour")
+@limiter.limit(get_rate_limit)
 async def chat_endpoint(
     request: Request,
     chat_request: ChatRequest,
@@ -77,6 +89,15 @@ async def chat_endpoint(
 
         # Get client IP for logging
         client_ip = request.client.host if request.client else None
+
+        # Log request details
+        logger.info(
+            f"Chat request - Session: {session_id[:8]}..., "
+            f"Message length: {len(chat_request.message)}, "
+            f"Has history: {len(chat_request.history) > 0}, "
+            f"IP: {client_ip}, "
+            f"Streaming: {stream}"
+        )
 
         if stream:
             # Streaming mode with caching support
@@ -105,10 +126,17 @@ async def chat_endpoint(
                 session_id=session_id,
                 client_ip=client_ip
             )
+
             return ChatResponse(reply=reply)
 
+    except InvalidMessageError as e:
+        logger.warning(f"Invalid message from {client_ip}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
-        logger.error(f"Chat error: {e}")
+        logger.error(f"Chat error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process chat: {str(e)}"

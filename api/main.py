@@ -5,7 +5,9 @@ from slowapi.errors import RateLimitExceeded
 
 from api.middleware.cors import setup_cors
 from api.middleware.rate_limit import limiter, rate_limit_exceeded_handler
+from api.middleware.rate_limit_state import rate_limit_state
 from api.routes import health, chat, admin
+from api.dependencies import get_config
 from database import close_database
 
 
@@ -13,6 +15,11 @@ from database import close_database
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown."""
     # Startup
+    config = get_config()
+    rate_limit_state.update_settings(
+        enabled=config.rate_limit_enabled,
+        rate_per_hour=config.rate_limit_per_hour
+    )
     yield
     # Shutdown
     await close_database()
@@ -57,10 +64,12 @@ async def root():
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
-    uvicorn.run(app, 
-                host="0.0.0.0", 
-                port=8000,
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app,
+                host="0.0.0.0",
+                port=port,
                 timeout_keep_alive=300,
                 log_level="info",
                 access_log=True

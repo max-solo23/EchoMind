@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import Enum
 
 from api.middleware.auth import verify_api_key
+from api.middleware.rate_limit_state import rate_limit_state
 from api.dependencies import (
     get_db_session,
     get_conversation_logger,
@@ -190,6 +191,16 @@ class DeleteSessionResponse(BaseModel):
 class ClearSessionsResponse(BaseModel):
     success: bool
     deleted_count: int
+
+
+class RateLimitSettings(BaseModel):
+    enabled: bool
+    rate_per_hour: int
+
+
+class UpdateRateLimitRequest(BaseModel):
+    enabled: Optional[bool] = None
+    rate_per_hour: Optional[int] = Field(None, ge=1, description="Requests per hour (minimum 1)")
 
 
 def require_database():
@@ -553,3 +564,48 @@ async def cleanup_expired_cache(
     logger = await get_conversation_logger(session)
     deleted = await logger.cleanup_expired_cache()
     return CleanupExpiredResponse(success=True, deleted_count=deleted)
+
+
+@router.get(
+    "/rate-limit",
+    response_model=RateLimitSettings
+)
+async def get_rate_limit_settings():
+    """
+    Get current rate limit settings.
+
+    Returns:
+    - enabled: Whether rate limiting is currently active
+    - rate_per_hour: Current rate limit (requests per hour)
+    """
+    return RateLimitSettings(**rate_limit_state.get_settings())
+
+
+@router.post(
+    "/rate-limit",
+    response_model=RateLimitSettings
+)
+async def update_rate_limit_settings(request: UpdateRateLimitRequest):
+    """
+    Update rate limit settings dynamically.
+
+    Can enable/disable rate limiting or change the rate limit without server restart.
+
+    Args:
+    - enabled: Set to true/false to enable/disable rate limiting
+    - rate_per_hour: New rate limit (minimum 1 request per hour)
+
+    Returns:
+    - Current rate limit settings after update
+    """
+    try:
+        rate_limit_state.update_settings(
+            enabled=request.enabled,
+            rate_per_hour=request.rate_per_hour
+        )
+        return RateLimitSettings(**rate_limit_state.get_settings())
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )

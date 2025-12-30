@@ -9,6 +9,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Released]
 
+## [2.3.0] - 2025-12-30
+
+### Added
+- **Dynamic rate limiting**: Admin endpoints to control rate limiting without server restart
+  - `GET /api/v1/admin/rate-limit` - Get current rate limit settings
+  - `POST /api/v1/admin/rate-limit` - Update settings (enable/disable, change rate)
+- **RateLimitState**: Thread-safe global state manager for rate limiting configuration
+- **Message validation**: Filter gibberish and invalid input with `InvalidMessageError`
+  - Rejects messages < 3 characters
+  - Rejects keyboard mashing (< 30% alphabetic characters)
+  - Returns 400 Bad Request with user-friendly error message
+- **LLM error handling**: Graceful handling of OpenAI API errors
+  - Rate limit errors: "I'm experiencing high demand right now..."
+  - Timeout errors: "I'm taking longer than expected..."
+  - Connection errors: "I'm having trouble connecting..."
+  - Generic API errors with fallback messages
+- **Enhanced logging**: Request details in chat endpoint
+  - Session ID, message length, history presence, client IP, streaming mode
+
+### Changed
+- **Rate limiting**: Now dynamically configurable at runtime (no restart required)
+- **Rate limit default**: Changed from 15/hour to 10/hour per IP
+- **Port configuration**: Respects `PORT` environment variable for Fly.io compatibility
+- **Evaluation logging**: Changed from `print()` to `logger.debug()` for cleaner logs
+- **Error responses**: User-friendly messages for all LLM error types
+- **Rate limit error message**: Improved clarity ("You've sent too many messages...")
+
+### Fixed
+- **Environment documentation**: Clarified rate limiting configuration in `.env.example`
+- **Streaming error handling**: Specific error codes for different OpenAI API failures
+
+### Technical Notes
+- Rate limiting can be disabled via admin API: `POST /api/v1/admin/rate-limit {"enabled": false}`
+- Message validation supports multiple languages (Latin, Cyrillic, accented characters)
+- All LLM errors are logged with full context (`exc_info=True`)
+- Rate limit state uses threading.Lock for thread safety
+
+---
+
+## [2.2.0] - 2025-12-30
+
+### Removed
+- **Rate limit metadata from responses**: Removed `rate_limit` field from `ChatResponse` model (frontend no longer displays this information)
+- **RateLimitInfo model**: Removed unused Pydantic model from `models/responses.py`
+
+### Changed
+- **Simplified response format**: Non-streaming chat responses now only return `{"reply": "..."}` without rate limit metadata (~150 bytes smaller per response)
+
+### Technical Notes
+- Rate limiting functionality is unchanged - only the response metadata was removed
+- Frontend already ignores this metadata as of FRONTEND-SIMPLIFICATION.md
+- Backwards compatible change - no API contract modifications needed
+
+---
+
 ## [2.1.0] - 2025-12-30
 
 ### Added

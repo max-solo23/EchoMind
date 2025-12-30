@@ -2,9 +2,30 @@ from core.llm.provider import LLMProvider
 from typing import Optional, AsyncGenerator
 import json
 import logging
+import re
+
+try:
+    from openai import (
+        APIError,
+        APITimeoutError,
+        RateLimitError,
+        APIConnectionError,
+    )
+except ImportError:
+    # Fallback if openai package structure is different
+    APIError = Exception
+    APITimeoutError = Exception
+    RateLimitError = Exception
+    APIConnectionError = Exception
 
 
 logger = logging.getLogger(__name__)
+
+
+class InvalidMessageError(Exception):
+    """Raised when a message fails validation."""
+    pass
+
 
 class Chat:
     def __init__(
@@ -24,43 +45,119 @@ class Chat:
         # Check if provider supports tools
         self.supports_tools = llm.capabilities.get("tools", False)
 
+    @staticmethod
+    def _is_valid_message(message: str) -> bool:
+        """
+        Validate message to filter gibberish and nonsense input.
+
+        Returns False if:
+        - Message is too short (< 3 characters)
+        - Message has < 30% alphabetic characters (keyboard mashing)
+        - Message is only special characters/numbers
+
+        Args:
+            message: User message to validate
+
+        Returns:
+            True if message appears valid, False otherwise
+        """
+        cleaned = message.strip()
+
+        # Too short
+        if len(cleaned) < 3:
+            return False
+
+        # Remove whitespace for analysis
+        no_spaces = cleaned.replace(" ", "")
+        if not no_spaces:
+            return False
+
+        # Count alphabetic characters (supports multiple languages)
+        # Pattern includes Latin, Cyrillic, and common accented characters
+        letter_pattern = r'[a-zA-ZàèéìòùáéíóúäëïöüāēīōūаеёиоуыэюяґєіїÀÈÉÌÒÙÁÉÍÓÚÄËÏÖÜĀĒĪŌŪАЕЁИОУЫЭЮЯҐЄІЇ]'
+        letters = len(re.findall(letter_pattern, no_spaces))
+        total = len(no_spaces)
+
+        # At least 30% should be letters
+        if total > 0 and (letters / total) < 0.3:
+            return False
+
+        return True
+
     def chat(self, message: str, history: list[dict]) -> str:
+        """
+        Process a chat message with validation and error handling.
+
+        Args:
+            message: User message
+            history: Conversation history
+
+        Returns:
+            Bot response string
+
+        Raises:
+            InvalidMessageError: If message fails validation
+        """
+        # Validate message
+        if not self._is_valid_message(message):
+            logger.warning(f"Invalid message rejected: {message[:50]}...")
+            raise InvalidMessageError(
+                "Your message appears to be incomplete or invalid. "
+                "Please send a clear question or message."
+            )
+
         person_system_prompt = self.person.system_prompt
 
         messages = [
             {"role": "system", "content": person_system_prompt}
-                           ] + history + [
+        ] + history + [
             {"role": "user", "content": message}
         ]
 
-        done = False
-        while not done:
-            # Only pass tools if provider supports them
-            tools = self.llm_tools.tools if self.supports_tools else None
-            response = self.llm.complete(model=self.llm_model, messages=messages, tools=tools)
-            finish_reason = response.finish_reason
-            msg = response.message
+        try:
+            done = False
+            while not done:
+                # Only pass tools if provider supports them
+                tools = self.llm_tools.tools if self.supports_tools else None
+                response = self.llm.complete(model=self.llm_model, messages=messages, tools=tools)
+                finish_reason = response.finish_reason
+                msg = response.message
 
-            if finish_reason == "tool_calls":
-                tool_calls = msg.tool_calls
-                results = self.llm_tools.handle_tool_call(tool_calls)
-                messages.append({"role": "assistant", "content": msg.content, "tool_calls": tool_calls})
-                messages.extend(results)
-            else:
-                done = True
+                if finish_reason == "tool_calls":
+                    tool_calls = msg.tool_calls
+                    results = self.llm_tools.handle_tool_call(tool_calls)
+                    messages.append({"role": "assistant", "content": msg.content, "tool_calls": tool_calls})
+                    messages.extend(results)
+                else:
+                    done = True
 
-        reply = msg.content or ""
-        if self.evaluator_llm:
-            evaluation = self.evaluator_llm.evaluate(reply, message, history)
+            reply = msg.content or ""
+            if self.evaluator_llm:
+                evaluation = self.evaluator_llm.evaluate(reply, message, history)
 
-            if evaluation.is_acceptable:
-                print("Passed evaluation - returning reply")
-            else:
-                print("Failed evaluation - returning reply")
-                print(message)
-                print(evaluation.feedback)
-                reply = self.rerun(reply, message, history, evaluation.feedback, self.person.system_prompt)
-        return reply
+                if evaluation.is_acceptable:
+                    logger.debug("Passed evaluation - returning reply")
+                else:
+                    logger.debug("Failed evaluation - rerunning")
+                    logger.debug(f"Feedback: {evaluation.feedback}")
+                    reply = self.rerun(reply, message, history, evaluation.feedback, self.person.system_prompt)
+            return reply
+
+        except RateLimitError as e:
+            logger.error(f"LLM rate limit error: {e}")
+            return "I'm experiencing high demand right now. Please try again in a moment."
+        except APITimeoutError as e:
+            logger.error(f"LLM timeout error: {e}")
+            return "I'm taking longer than expected to respond. Please try again."
+        except APIConnectionError as e:
+            logger.error(f"LLM connection error: {e}")
+            return "I'm having trouble connecting to my AI service. Please try again shortly."
+        except APIError as e:
+            logger.error(f"LLM API error: {e}")
+            return "I encountered an API issue. Please try again."
+        except Exception as e:
+            logger.error(f"Unexpected error in chat: {type(e).__name__} - {e}")
+            return "I encountered an unexpected issue. Please try again or rephrase your question."
 
     def rerun(self, reply: str, message: str, history: list[dict], feedback: str, system_prompt: str) -> str:
         updated_system_prompt = system_prompt + f"\n\n## Previous answer rejected\nYou just tried to reply, but the \
@@ -173,13 +270,23 @@ class Chat:
             yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
 
 
+        except RateLimitError as e:
+            logger.error(f"LLM rate limit error (streaming): {e}")
+            event = {"delta": None, "metadata": {"error": str(e), "code": "rate_limit"}}
+            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+        except APITimeoutError as e:
+            logger.error(f"LLM timeout error (streaming): {e}")
+            event = {"delta": None, "metadata": {"error": str(e), "code": "api_timeout"}}
+            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+        except APIConnectionError as e:
+            logger.error(f"LLM connection error (streaming): {e}")
+            event = {"delta": None, "metadata": {"error": str(e), "code": "connection_error"}}
+            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+        except APIError as e:
+            logger.error(f"LLM API error (streaming): {e}")
+            event = {"delta": None, "metadata": {"error": str(e), "code": "api_error"}}
+            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
         except Exception as e:
-            # Yield error event
-            error_code = "api_error"
-            if "timeout" in str(e).lower():
-                error_code = "api_timeout"
-            elif "rate" in str(e).lower():
-                error_code = "rate_limit"
-
-            event = {"delta": None, "metadata": {"error": str(e), "code": error_code}}
+            logger.error(f"Unexpected error in streaming: {type(e).__name__} - {e}")
+            event = {"delta": None, "metadata": {"error": str(e), "code": "unknown_error"}}
             yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
