@@ -37,6 +37,9 @@ class CacheStats(BaseModel):
     total_questions: int
     total_variations: int
     avg_variations_per_question: float
+    knowledge_entries: int = 0
+    conversational_entries: int = 0
+    expired_entries: int = 0
 
 
 class ClearCacheResponse(BaseModel):
@@ -91,9 +94,13 @@ class SessionListResponse(BaseModel):
 
 class CacheEntry(BaseModel):
     id: int
+    cache_key: Optional[str] = None
     question: str
+    context_preview: Optional[str] = None
     variations: list[str]
     variation_index: int
+    cache_type: str = "knowledge"
+    expires_at: Optional[datetime] = None
     hit_count: int
     created_at: Optional[datetime]
     last_used: Optional[datetime]
@@ -101,10 +108,14 @@ class CacheEntry(BaseModel):
 
 class CacheEntryDetail(BaseModel):
     id: int
+    cache_key: Optional[str] = None
     question: str
+    context_preview: Optional[str] = None
     tfidf_vector: Optional[str]
     variations: list[str]
     variation_index: int
+    cache_type: str = "knowledge"
+    expires_at: Optional[datetime] = None
     hit_count: int
     created_at: Optional[datetime]
     last_used: Optional[datetime]
@@ -120,7 +131,11 @@ class CacheListResponse(BaseModel):
 
 class CacheSearchResult(BaseModel):
     id: int
+    cache_key: Optional[str] = None
     question: str
+    context_preview: Optional[str] = None
+    cache_type: str = "knowledge"
+    expires_at: Optional[datetime] = None
     hit_count: int
     last_used: Optional[datetime]
 
@@ -158,6 +173,13 @@ class CacheSortBy(str, Enum):
     hit_count = "hit_count"
     created_at = "created_at"
     last_used = "last_used"
+    expires_at = "expires_at"
+    cache_type = "cache_type"
+
+
+class CleanupExpiredResponse(BaseModel):
+    success: bool
+    deleted_count: int
 
 
 def require_database():
@@ -447,3 +469,26 @@ async def delete_cache_entry(
         success=True,
         deleted_id=cache_id
     )
+
+
+@router.post(
+    "/cache/cleanup",
+    response_model=CleanupExpiredResponse,
+    dependencies=[Depends(require_database)]
+)
+async def cleanup_expired_cache(
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Delete all expired cache entries.
+
+    Call periodically to clean up stale cache entries.
+    Entries are considered expired when expires_at < current time.
+
+    Returns:
+    - success: Always true if operation completes
+    - deleted_count: Number of expired entries deleted
+    """
+    logger = await get_conversation_logger(session)
+    deleted = await logger.cleanup_expired_cache()
+    return CleanupExpiredResponse(success=True, deleted_count=deleted)

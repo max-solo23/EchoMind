@@ -3,13 +3,14 @@ Conversation Logger Service - Main orchestration for logging and caching.
 
 This is the entry point from Chat.py for:
 - Logging all conversations
-- Checking cache for existing answers
-- Storing answers in cache
+- Checking cache for existing answers (with context awareness)
+- Storing answers in cache (with TTL)
 
 Design:
 - Coordinates between cache service and conversation repository
 - Handles session management
 - Provides clean API for Chat.py integration
+- Supports context-aware caching to prevent cross-conversation contamination
 """
 
 from typing import Optional
@@ -22,8 +23,8 @@ class ConversationLogger:
     Main service for conversation logging and caching.
 
     Usage in Chat.py:
-    1. Before LLM call: check cache for answer
-    2. After LLM call: log conversation and cache answer
+    1. Before LLM call: check cache for answer (with context)
+    2. After LLM call: log conversation and cache answer (with context + TTL)
     """
 
     def __init__(
@@ -61,22 +62,38 @@ class ConversationLogger:
         """
         return await self.conversation_repo.create_session(session_id, user_ip)
 
-    async def check_cache(self, question: str) -> Optional[str]:
+    async def check_cache(
+        self,
+        question: str,
+        last_assistant_message: Optional[str] = None,
+        is_continuation: bool = False
+    ) -> Optional[str]:
         """
-        Check if we have a cached answer for this question.
+        Check if we have a cached answer for this question with context.
 
         Call this BEFORE making LLM request.
 
+        Context-aware caching:
+        - Uses last_assistant_message to create unique cache keys
+        - Skips cache for acknowledgements/fillers in continuations
+        - Respects TTL (24h for conversational, 30d for knowledge)
+
         Args:
             question: User's question
+            last_assistant_message: Previous assistant response (for context key)
+            is_continuation: True if conversation has history (affects denylist)
 
         Returns:
-            Cached answer if found, None otherwise
+            Cached answer if found and not expired, None otherwise
         """
         if not self.enable_caching:
             return None
 
-        return await self.cache_service.get_cached_answer(question)
+        return await self.cache_service.get_cached_answer(
+            message=question,
+            last_assistant_message=last_assistant_message,
+            is_continuation=is_continuation
+        )
 
     async def log_and_cache(
         self,
@@ -86,12 +103,19 @@ class ConversationLogger:
         tool_calls: Optional[list] = None,
         evaluator_used: bool = False,
         evaluator_passed: Optional[bool] = None,
-        cache_response: bool = True
+        cache_response: bool = True,
+        last_assistant_message: Optional[str] = None,
+        is_continuation: bool = False
     ) -> int:
         """
-        Log conversation and optionally cache the response.
+        Log conversation and optionally cache the response with context.
 
         Call this AFTER getting LLM response.
+
+        Context-aware caching:
+        - Creates unique cache key from (context + question)
+        - Applies appropriate TTL based on cache type
+        - Skips caching for low-information inputs
 
         Args:
             session_db_id: Database session ID
@@ -101,11 +125,13 @@ class ConversationLogger:
             evaluator_used: Whether evaluator was used
             evaluator_passed: Whether evaluation passed
             cache_response: Whether to cache this response
+            last_assistant_message: Previous assistant response (for context key)
+            is_continuation: True if conversation has history
 
         Returns:
             Conversation ID
         """
-        # Log the conversation
+        # Log the conversation (always logged regardless of cache)
         conversation_id = await self.conversation_repo.log_conversation(
             session_db_id=session_db_id,
             user_message=user_message,
@@ -115,12 +141,15 @@ class ConversationLogger:
             evaluator_passed=evaluator_passed
         )
 
-        # Cache the response if enabled
+        # Cache the response if enabled and requested
         if self.enable_caching and cache_response:
-            # Only cache if no similar question exists
-            should_cache = await self.cache_service.should_cache(user_message)
-            if should_cache:
-                await self.cache_service.cache_answer(user_message, bot_response)
+            # cache_answer handles all filtering (denylist, min tokens, etc.)
+            await self.cache_service.cache_answer(
+                message=user_message,
+                answer=bot_response,
+                last_assistant_message=last_assistant_message,
+                is_continuation=is_continuation
+            )
 
         return conversation_id
 
@@ -138,10 +167,10 @@ class ConversationLogger:
 
     async def get_cache_stats(self) -> dict:
         """
-        Get cache statistics.
+        Get cache statistics including TTL breakdown.
 
         Returns:
-            Dict with cache stats
+            Dict with cache stats (total, by type, expired count)
         """
         return await self.cache_service.get_cache_stats()
 
@@ -154,7 +183,18 @@ class ConversationLogger:
         """
         return await self.cache_service.clear_cache()
 
-    # New admin methods for frontend
+    async def cleanup_expired_cache(self) -> int:
+        """
+        Delete all expired cache entries.
+
+        Call periodically (e.g., on startup, via cron) to clean up old entries.
+
+        Returns:
+            Number of entries deleted
+        """
+        return await self.cache_service.cleanup_expired()
+
+    # Admin methods for frontend
 
     async def list_sessions(
         self,

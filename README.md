@@ -1,224 +1,208 @@
 # EchoMind
 
-**EchoMind** is a personal AI chatbot application that represents you as a configurable persona in conversational interactions. It uses your profile (configured via YAML) to answer questions about your skills, experience, projects, and contact information in a natural, authentic way.
+Personal AI chatbot that embodies a configurable persona for portfolio websites and conversational interfaces.
 
-## What Does It Do?
+## Features
 
-- **Persona-Based Chat**: The AI acts as you, based on your persona configuration
-- **Tool Calling**: Captures interested users' contact info and logs unknown questions
-- **Quality Control**: Optional response evaluation to maintain professional, on-brand replies
-- **Dual Interface**:
-  - Gradio UI for interactive local testing
-  - FastAPI REST API for integration with portfolio websites
-- **Multi-Provider Support**: Works with OpenAI, Gemini, DeepSeek, Grok, and Ollama
-- **Streaming Responses**: Real-time token streaming via Server-Sent Events (SSE)
+- **Persona System** - Define personality, background, and expertise via YAML configuration
+- **Multi-Provider LLM Support** - OpenAI, Gemini, and OpenAI-compatible APIs (DeepSeek, Grok, etc.)
+- **REST API** - FastAPI server with streaming support (SSE)
+- **Gradio UI** - Interactive demo interface
+- **Context-Aware Caching** - Intelligent response caching with TTL to reduce API costs
+- **Quality Evaluation** - Optional response quality control via evaluator agent
+- **Tool Calling** - Capture user contact info, log unknown questions
+- **Push Notifications** - Alerts via Pushover when users engage
 
-## Setup Instructions
+## Quick Start
 
 ```bash
-# clone repository
-git clone <repository-url>
-cd <project-folder>
+# Clone and setup
+git clone https://github.com/max-solo23/EchoMind.git
+cd EchoMind
 
-# create and activate virtual environment
+# Create virtual environment
 python -m venv venv
-venv\Scripts\activate  # or source venv/bin/activate
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Unix/Mac
 
-# install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# start Gradio UI (local development)
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
+
+# Run
 python app.py
-
-# OR start FastAPI server (production API)
-python -m api.main
 ```
 
-The Gradio interface runs at `http://localhost:7860`
-The FastAPI server runs at `http://localhost:8000` with docs at `/docs`
+## Configuration
 
-## Environment Variables
+### Environment Variables
 
-Create your own .env file in the root directory of the project. This file is required to store your personal API keys and tokens securely. Do not commit it to version control.
+Create a `.env` file in the project root:
 
-Pushover credentials are optional and only needed if you want to enable notification features.
+```env
+# Required
+LLM_PROVIDER=openai          # openai, gemini, or openai-compatible
+LLM_API_KEY=your-api-key
+LLM_MODEL=gpt-4o-mini
 
-Example `.env` content:
+# Optional - OpenAI-compatible providers
+LLM_BASE_URL=https://api.deepseek.com/v1
 
-```
-# LLM Configuration
-LLM_PROVIDER=openai
-LLM_API_KEY=your_openai_api_key_here
-LLM_MODEL=gpt-5.2
-
-# OpenAI other models:
-# LLM_MODEL=gpt-5-mini  # Smaller, faster variant
-# LLM_MODEL=gpt-4o      # Still available via API
-# LLM_MODEL=gpt-5.1     # Previous version
-
-# Gemini example:
-# LLM_PROVIDER=gemini
-# LLM_API_KEY=your_gemini_api_key
-# LLM_MODEL=gemini-3-flash
-
-# Gemini other models:
-# LLM_MODEL=gemini-2.0-flash
-# LLM_MODEL=gemini-2.0-flash-lite
-# LLM_MODEL=gemini-2.0-pro
-
-# DeepSeek example:
-# LLM_PROVIDER=openai
-# LLM_API_KEY=your_deepseek_api_key
-# LLM_MODEL=deepseek-chat
-# LLM_BASE_URL=https://api.deepseek.com/v1
-
-# DeepSeek reasoning model:
-# LLM_MODEL=deepseek-reasoner  # For complex reasoning tasks
-
-# xAI Grok example:
-# LLM_PROVIDER=openai
-# LLM_API_KEY=your_xai_api_key
-# LLM_MODEL=grok-4-1-fast-reasoning
-# LLM_BASE_URL=https://api.x.ai/v1
-
-# Grok other models:
-# LLM_MODEL=grok-4
-# LLM_MODEL=grok-3-mini  # Smaller, faster variant
-
-# Ollama example (local):
-# LLM_PROVIDER=openai
-# LLM_API_KEY=ollama
-# LLM_MODEL=llama3.2
-# LLM_BASE_URL=http://localhost:11434/v1
-
-# Notification Service (Optional)
-PUSHOVER_USER=your_pushover_user_key
-PUSHOVER_TOKEN=your_pushover_token
-
-# Response Quality Evaluation (Optional)
+# Optional - Quality evaluation
 USE_EVALUATOR=false
 
-# API Configuration (Required for FastAPI)
-API_KEY=your_secret_api_key_here
-ALLOWED_ORIGINS=http://localhost:3000,https://your-portfolio.com
+# Optional - Push notifications
+PUSHOVER_TOKEN=your-token
+PUSHOVER_USER=your-user-key
 
-# Rate Limiting (Optional)
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_PER_HOUR=15
+# Required for API server
+API_KEY=your-api-key
+ALLOWED_ORIGINS=https://yoursite.com,http://localhost:3000
+
+# Optional - Database (enables caching & logging)
+POSTGRES_URL=postgresql+asyncpg://user:pass@host:5432/echomind
 ```
-Replace the placeholder values with your actual credentials before running the app.
 
-**For FastAPI:** `API_KEY` and `ALLOWED_ORIGINS` are required.
+### Persona Configuration
 
-## Profile Configuration
+Create `persona.yaml` in the project root:
 
-Create your persona profile:
+```yaml
+name: "Alex Chen"
+title: "Full Stack Developer"
+background: |
+  5 years of experience building web applications.
+  Passionate about clean code and user experience.
+expertise:
+  - Python
+  - React
+  - PostgreSQL
+  - Cloud deployment
+personality: |
+  Friendly and approachable. Explains complex topics simply.
+  Enthusiastic about helping others learn.
+```
 
-1. Rename `persona.yaml.example` to `persona.yaml`
-2. Fill in your personal information (name, skills, projects, contacts, etc.)
-3. The AI will use this to represent you authentically
+## API Endpoints
 
-## API Usage
-
-### Starting the API
+### Chat
 
 ```bash
-python -m api.main
+# Non-streaming
+curl -X POST https://your-api/api/v1/chat \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Tell me about yourself", "history": []}'
+
+# Streaming (SSE)
+curl -X POST "https://your-api/api/v1/chat?stream=true" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Tell me about yourself", "history": []}'
 ```
 
-Server runs at `http://localhost:8000`
-
-### Endpoints
-
-**POST /api/v1/chat** - Chat with AI persona (requires API key)
-
-Query Parameters:
-- `stream` (optional): Set to `true` to enable streaming response via SSE
-
-**Standard Response (default):**
-
-Request:
-```json
-{
-  "message": "What are your main skills?",
-  "history": []
-}
-```
-
-Headers:
-- `X-API-Key`: Your API key
-- `Content-Type`: application/json
-
-Response:
-```json
-{
-  "reply": "I specialize in..."
-}
-```
-
-**Streaming Response:**
-
-Request: `POST /api/v1/chat?stream=true`
-
-Same JSON body as above. Response is Server-Sent Events (SSE) stream:
-
-```
-data: {"delta": "I", "metadata": null}
-
-data: {"delta": " specialize", "metadata": null}
-
-data: {"delta": " in...", "metadata": null}
-
-data: {"delta": null, "metadata": {"done": true}}
-
-```
-
-Event metadata may include tool call status:
-```
-data: {"delta": null, "metadata": {"tool_call": "record_user_details", "status": "executing"}}
-data: {"delta": null, "metadata": {"tool_call": "record_user_details", "status": "success"}}
-```
-
-Note: Streaming mode bypasses the evaluator for real-time responses.
-
-**GET /health** - Health check (no auth required)
-
-**GET /docs** - Interactive API documentation
-
-### Rate Limiting
-
-The API implements IP-based rate limiting to prevent abuse:
-
-- **Default Limit**: 15 requests per hour per IP address
-- **Applies To**: `/api/v1/chat` endpoint (both streaming and non-streaming)
-- **Exempt Endpoints**: `/health`, `/` (root), `/docs`
-- **Configuration**: Set via environment variables
-
-When the rate limit is exceeded, the API returns:
-
-```json
-{
-  "error": "Rate limit exceeded",
-  "detail": "You have exceeded the request limit. Please try again later.",
-  "retry_after": "3600"
-}
-```
-
-HTTP Status: `429 Too Many Requests`
-Header: `Retry-After: 3600` (seconds until limit resets)
-
-**Configuration Options:**
+### Admin
 
 ```bash
-# Disable rate limiting (for testing)
-RATE_LIMIT_ENABLED=false
+# Cache stats
+GET /api/v1/admin/cache/stats
 
-# Adjust limit (default: 15)
-RATE_LIMIT_PER_HOUR=30
+# List cache entries
+GET /api/v1/admin/cache/entries?page=1&limit=20
+
+# Clear expired cache
+POST /api/v1/admin/cache/cleanup
+
+# Health check
+GET /api/v1/admin/health
 ```
 
-**Notes:**
-- Rate limits apply equally to all users (authenticated or not)
-- Limits are tracked per IP address using `X-Forwarded-For` header when behind a proxy
-- Limits reset on server restart (in-memory storage)
-- Health checks and documentation endpoints are never rate limited
+## Caching System
+
+EchoMind includes intelligent response caching:
+
+- **Context-Aware Keys** - Same question after different responses creates different cache entries
+- **TTL Expiration** - Knowledge queries: 30 days, Conversational: 24 hours
+- **Denylist Filtering** - Short acknowledgements ("ok", "thanks") are not cached in continuations
+- **Similarity Matching** - TF-IDF with 90% threshold for fuzzy question matching
+- **Answer Variations** - Up to 3 variations per question with rotation
+
+## Database Setup
+
+Optional PostgreSQL for caching and conversation logging:
+
+```bash
+# Run migrations
+alembic upgrade head
+```
+
+## Project Structure
+
+```
+EchoMind/
+├── app.py                 # Gradio interface entry point
+├── Chat.py                # Main chat orchestration
+├── Me.py                  # Persona loader
+├── Tools.py               # LLM function calling
+├── EvaluatorAgent.py      # Response quality control
+├── Evaluation.py          # Evaluation models
+├── PushOver.py            # Push notification service
+├── config.py              # Configuration management
+├── database.py            # Database connection setup
+├── api/
+│   ├── main.py            # FastAPI application
+│   ├── dependencies.py    # Dependency injection
+│   ├── routes/
+│   │   ├── chat.py        # Chat endpoints
+│   │   ├── admin.py       # Admin endpoints
+│   │   └── health.py      # Health check endpoint
+│   └── middleware/
+│       ├── auth.py        # API key authentication
+│       ├── cors.py        # CORS configuration
+│       └── rate_limit.py  # Rate limiting (10/hour)
+├── services/
+│   ├── cache_service.py   # Context-aware caching
+│   ├── conversation_logger.py
+│   └── similarity_service.py
+├── repositories/
+│   ├── cache_repo.py      # Cache database operations
+│   └── conversation_repo.py
+├── core/
+│   ├── interfaces.py      # Protocol definitions
+│   └── llm/
+│       ├── factory.py     # Provider factory
+│       ├── provider.py    # Base provider
+│       ├── types.py       # Type definitions
+│       └── providers/
+│           ├── openai_compatible.py
+│           └── gemini.py
+├── models/
+│   ├── models.py          # SQLAlchemy models
+│   ├── requests.py        # Pydantic request models
+│   └── responses.py       # Pydantic response models
+├── alembic/               # Database migrations
+└── tests/                 # Test suite
+```
+
+## Development
+
+```bash
+# Run API server (development)
+uvicorn api.main:app --reload --port 8000
+
+# Run Gradio interface
+python app.py
+
+# Run migrations
+alembic upgrade head
+
+# Create new migration
+alembic revision -m "description"
+```
+
+## License
+
+MIT

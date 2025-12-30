@@ -75,18 +75,29 @@ class CachedAnswer(Base):
     Cached answers with TF-IDF vectors for similarity matching.
 
     Design:
+    - Context-aware caching: cache_key = hash(last_assistant_message + user_message)
     - One question can have up to 3 variations (stored as JSON array)
-    - tfidf_vector: Serialized numpy array for similarity matching.
-    - variation_index: Which variation to show next (0, 1 or 2)
+    - tfidf_vector: Serialized numpy array for similarity matching
+    - TTL: knowledge cache (30 days) vs conversational cache (24 hours)
 
-    Why TF-IDF vector?
-    - Pre-compute to avoid recalculating on every request
-    - Store as JSON for portability
+    Why context-aware keys?
+    - Prevents "ok" after different conversations from returning wrong cached answers
+    - Same question in different contexts produces different cache entries
     """
     __tablename__ = "cached_answers"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+
+    # Context-aware cache key (SHA256 hash of context + question)
+    cache_key: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+
+    # Original question text (for admin UI, debugging, similarity matching)
     question: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+
+    # Truncated context for debugging (first 200 chars of last assistant message)
+    context_preview: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    # TF-IDF vector for similarity matching
     tfidf_vector: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Answer variations (JSON array, max 3 items)
@@ -96,12 +107,20 @@ class CachedAnswer(Base):
     # Rotation tracking: which variation to show (0-2)
     variation_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    # Cache type and TTL
+    # "knowledge" = standalone questions (30 day TTL)
+    # "conversational" = context-dependent replies (24 hour TTL)
+    cache_type: Mapped[str] = mapped_column(String(20), default="knowledge", nullable=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+
     # Metadata
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     last_used: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     hit_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    # Index for similarity search
+    # Indexes for efficient queries
     __table_args__ = (
         Index('ix_cached_answers_last_used', last_used.desc()),
+        Index('ix_cached_answers_expires_at', expires_at),
+        Index('ix_cached_answers_cache_type', cache_type),
     )
