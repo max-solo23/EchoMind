@@ -45,7 +45,7 @@ if config.use_evaluator:
     print("Evaluator enabled")
 else:
     print("Evaluator disabled")
-    
+
 pushover_client = build_pushover_client(config.pushover_token, config.pushover_user)
 tools = Tools(pushover_client)
 chat = Chat(me, llm_provider, config.llm_model, tools, evaluator)

@@ -60,7 +60,7 @@ class Config:
             llm_model=os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL", "gpt-5.2"),
             pushover_token=os.getenv("PUSHOVER_TOKEN"),
             pushover_user=os.getenv("PUSHOVER_USER"),
-            persona_name="Maksym",
+            persona_name="Max",
             persona_file="persona.yaml",
             use_evaluator=os.getenv("USE_EVALUATOR", "false").lower() == "true",
             api_key=os.getenv("API_KEY", ""),
