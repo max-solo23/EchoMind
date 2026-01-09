@@ -12,14 +12,43 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 import time
+import os
 
 from api.main import app
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
     """Create a test client for the FastAPI app."""
-    return TestClient(app)
+    # Set required environment variables for API
+    monkeypatch.setenv("API_KEY", "test-api-key")
+    monkeypatch.setenv("ALLOWED_ORIGINS", "http://localhost:3000")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_API_KEY", "test-key-123")
+    monkeypatch.setenv("LLM_MODEL", "gpt-4")
+
+    # Mock the config dependency to return test config
+    from config import Config
+    test_config = Config(
+        llm_provider="openai",
+        llm_api_key="test-key-123",
+        llm_model="gpt-4",
+        llm_base_url=None,
+        use_evaluator=False,
+        persona_name="Test",
+        persona_file="persona.yaml",
+        pushover_token=None,
+        pushover_user=None,
+        api_key="test-api-key",
+        allowed_origins=["http://localhost:3000"],
+        rate_limit_per_hour=15  # Test expects 15 requests
+    )
+
+    # Patch in multiple places where get_config is called
+    with patch("api.dependencies.get_config", return_value=test_config), \
+         patch("api.main.get_config", return_value=test_config), \
+         patch("api.middleware.auth.get_config", return_value=test_config):
+        yield TestClient(app)
 
 
 @pytest.fixture
@@ -32,6 +61,24 @@ def mock_chat_service():
         yield service
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limit():
+    """Reset rate limit counters before each test."""
+    from api.middleware.rate_limit import limiter
+    from api.middleware.rate_limit_state import rate_limit_state
+
+    # Reset slowapi limiter storage
+    limiter.reset()
+
+    # Ensure rate limiting is enabled for tests
+    rate_limit_state.update_settings(enabled=True, rate_per_hour=15)
+
+    yield
+
+    # Clean up after test
+    limiter.reset()
+
+
 class TestRateLimiting:
     """Test suite for rate limiting functionality."""
 
@@ -42,7 +89,7 @@ class TestRateLimiting:
             response = client.post(
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
-                headers={"X-API-Key": "test-key"}
+                headers={"X-API-Key": "test-api-key"}
             )
             assert response.status_code == 200, f"Request {i+1} should succeed"
 
@@ -50,7 +97,7 @@ class TestRateLimiting:
         response = client.post(
             "/api/v1/chat",
             json={"message": "test 16", "history": []},
-            headers={"X-API-Key": "test-key"}
+            headers={"X-API-Key": "test-api-key"}
         )
         assert response.status_code == 429
         assert "error" in response.json()
@@ -63,14 +110,14 @@ class TestRateLimiting:
             client.post(
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
-                headers={"X-API-Key": "test-key"}
+                headers={"X-API-Key": "test-api-key"}
             )
 
         # Check 429 response format
         response = client.post(
             "/api/v1/chat",
             json={"message": "test", "history": []},
-            headers={"X-API-Key": "test-key"}
+            headers={"X-API-Key": "test-api-key"}
         )
         assert response.status_code == 429
 
@@ -88,14 +135,14 @@ class TestRateLimiting:
             client.post(
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
-                headers={"X-API-Key": "test-key"}
+                headers={"X-API-Key": "test-api-key"}
             )
 
         # Check Retry-After header
         response = client.post(
             "/api/v1/chat",
             json={"message": "test", "history": []},
-            headers={"X-API-Key": "test-key"}
+            headers={"X-API-Key": "test-api-key"}
         )
         assert response.status_code == 429
         assert "retry-after" in response.headers
@@ -122,7 +169,7 @@ class TestRateLimiting:
             client.post(
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
-                headers={"X-API-Key": "test-key"}
+                headers={"X-API-Key": "test-api-key"}
             )
 
         # Next request should be rate limited even with invalid API key
@@ -143,14 +190,14 @@ class TestRateLimiting:
             client.post(
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
-                headers={"X-API-Key": "test-key"}
+                headers={"X-API-Key": "test-api-key"}
             )
 
         # Streaming request should also be rate limited
         response = client.post(
             "/api/v1/chat?stream=true",
             json={"message": "test", "history": []},
-            headers={"X-API-Key": "test-key"}
+            headers={"X-API-Key": "test-api-key"}
         )
         assert response.status_code == 429
 
@@ -193,7 +240,7 @@ class TestRateLimitIntegration:
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
                 headers={
-                    "X-API-Key": "test-key",
+                    "X-API-Key": "test-api-key",
                     "X-Forwarded-For": "192.168.1.100"
                 }
             )
@@ -204,7 +251,7 @@ class TestRateLimitIntegration:
             "/api/v1/chat",
             json={"message": "test", "history": []},
             headers={
-                "X-API-Key": "test-key",
+                "X-API-Key": "test-api-key",
                 "X-Forwarded-For": "192.168.1.100"
             }
         )
