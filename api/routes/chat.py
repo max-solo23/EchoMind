@@ -1,32 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, Header
-from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Annotated, Optional, AsyncGenerator
-import uuid
 import json
 import logging
+import uuid
+from collections.abc import AsyncGenerator
+from typing import Annotated
 
-from models.requests import ChatRequest
-from models.responses import ChatResponse
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
+
+from api.dependencies import (
+    get_chat_service,
+    get_config,
+    get_conversation_logger,
+    is_database_configured,
+)
 from api.middleware.auth import verify_api_key
 from api.middleware.rate_limit import limiter
 from api.middleware.rate_limit_state import rate_limit_state
-from api.dependencies import (
-    get_chat_service,
-    get_db_session,
-    get_conversation_logger,
-    is_database_configured,
-    get_config,
-)
 from Chat import Chat, InvalidMessageError
-from services.conversation_logger import ConversationLogger
+from models.requests import ChatRequest
+from models.responses import ChatResponse
+
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 
-def extract_last_assistant_message(history: list[dict]) -> Optional[str]:
+def extract_last_assistant_message(history: list[dict]) -> str | None:
     """
     Extract the last assistant message from conversation history.
 
@@ -68,7 +68,7 @@ async def chat_endpoint(
     chat_request: ChatRequest,
     chat_service: Annotated[Chat, Depends(get_chat_service)],
     stream: bool = Query(False, description="Enable streaming response (SSE)"),
-    x_session_id: Optional[str] = Header(None, description="Session ID for conversation tracking")
+    x_session_id: str | None = Header(None, description="Session ID for conversation tracking")
 ):
     """
     Chat endpoint with optional streaming support and conversation logging.
@@ -134,13 +134,13 @@ async def chat_endpoint(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
-        )
+        ) from None
     except Exception as e:
         logger.error(f"Chat error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process chat: {str(e)}"
-        )
+        ) from None
 
 
 async def _chat_with_logging(
@@ -148,7 +148,7 @@ async def _chat_with_logging(
     message: str,
     history: list[dict],
     session_id: str,
-    client_ip: Optional[str]
+    client_ip: str | None
 ) -> str:
     """
     Handle chat with context-aware caching and logging.
@@ -169,8 +169,8 @@ async def _chat_with_logging(
     is_continuation = len(history) > 0
 
     # Database is configured - use caching and logging
-    from database import get_session
     from api.dependencies import get_config
+    from database import get_session
 
     config = get_config()
 
@@ -221,7 +221,7 @@ async def _stream_with_logging(
     message: str,
     history: list[dict],
     session_id: str,
-    client_ip: Optional[str]
+    client_ip: str | None
 ) -> AsyncGenerator[bytes, None]:
     """
     Stream chat response with context-aware caching and logging.
@@ -278,11 +278,11 @@ async def _stream_with_logging(
             for i in range(0, len(cached_answer), chunk_size):
                 chunk = cached_answer[i:i + chunk_size]
                 event = {"delta": chunk, "metadata": {"cached": True}}
-                yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+                yield f"data: {json.dumps(event)}\n\n".encode()
 
             # Completion event
             event = {"delta": None, "metadata": {"done": True, "cached": True}}
-            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+            yield f"data: {json.dumps(event)}\n\n".encode()
             return
 
     # Cache miss - stream from LLM and accumulate response

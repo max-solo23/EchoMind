@@ -1,11 +1,12 @@
 """SQLAlchemy implementation of CacheRepository with context-aware caching."""
 
-from typing import Optional
-from datetime import datetime
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, func, desc
-from models.models import CachedAnswer
 import json
+from datetime import datetime
+
+from sqlalchemy import delete, desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.models import CachedAnswer
 
 
 class SQLAlchemyCacheRepository:
@@ -21,7 +22,7 @@ class SQLAlchemyCacheRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get_cache_by_key(self, cache_key: str) -> Optional[dict]:
+    async def get_cache_by_key(self, cache_key: str) -> dict | None:
         """
         Get cache entry by context-aware key (SHA256 hash).
 
@@ -56,7 +57,7 @@ class SQLAlchemyCacheRepository:
             "last_used": cache.last_used,
         }
 
-    async def get_cache_by_question(self, question: str) -> Optional[dict]:
+    async def get_cache_by_question(self, question: str) -> dict | None:
         """
         Get exact match for question text.
 
@@ -121,8 +122,8 @@ class SQLAlchemyCacheRepository:
         tfidf_vector: str,
         answer: str,
         cache_type: str = "knowledge",
-        expires_at: Optional[datetime] = None,
-        context_preview: Optional[str] = None
+        expires_at: datetime | None = None,
+        context_preview: str | None = None
     ) -> int:
         """
         Create new cache entry with context-aware key and TTL.
@@ -306,7 +307,7 @@ class SQLAlchemyCacheRepository:
             "total_pages": (total + limit - 1) // limit if total else 0,
         }
 
-    async def get_cache_by_id(self, cache_id: int) -> Optional[dict]:
+    async def get_cache_by_id(self, cache_id: int) -> dict | None:
         """Get single cache entry by ID."""
         result = await self.session.execute(
             select(CachedAnswer).where(CachedAnswer.id == cache_id)

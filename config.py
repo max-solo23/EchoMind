@@ -1,6 +1,6 @@
-from dataclasses import dataclass
-from typing import Optional
 import os
+from dataclasses import dataclass
+
 from dotenv import load_dotenv
 
 
@@ -10,8 +10,8 @@ class Config:
     llm_api_key: str
     llm_base_url: str | None
     llm_model: str
-    pushover_token: Optional[str]
-    pushover_user: Optional[str]
+    pushover_token: str | None
+    pushover_user: str | None
     persona_name: str
     persona_file: str
     use_evaluator: bool = False
@@ -19,7 +19,7 @@ class Config:
     allowed_origins: list[str] = None
     rate_limit_enabled: bool = True
     rate_limit_per_hour: int = 10
-    database_url: Optional[str] = None
+    database_url: str | None = None
     db_pool_size: int = 10
     db_max_overflow: int = 10
     db_echo: bool = False

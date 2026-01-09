@@ -17,10 +17,10 @@ Design decisions:
 import hashlib
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Optional
+
+from repositories.cache_repo import SQLAlchemyCacheRepository
 
 from .similarity_service import SimilarityService
-from repositories.cache_repo import SQLAlchemyCacheRepository
 
 
 class CacheType(str, Enum):
@@ -124,10 +124,7 @@ class CacheService:
             return True
 
         # Rule 4: Short messages below threshold
-        if token_count < MIN_TOKENS_FOR_CACHE:
-            return True
-
-        return False
+        return token_count < MIN_TOKENS_FOR_CACHE
 
     def get_cache_type(self, is_continuation: bool) -> CacheType:
         """
@@ -159,7 +156,7 @@ class CacheService:
     def build_cache_key(
         self,
         message: str,
-        last_assistant_message: Optional[str] = None
+        last_assistant_message: str | None = None
     ) -> str:
         """
         Build context-aware cache key.
@@ -183,9 +180,9 @@ class CacheService:
     async def get_cached_answer(
         self,
         message: str,
-        last_assistant_message: Optional[str] = None,
+        last_assistant_message: str | None = None,
         is_continuation: bool = False
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Try to find a cached answer for the message with context awareness.
 
@@ -244,9 +241,9 @@ class CacheService:
         self,
         message: str,
         answer: str,
-        last_assistant_message: Optional[str] = None,
+        last_assistant_message: str | None = None,
         is_continuation: bool = False
-    ) -> Optional[int]:
+    ) -> int | None:
         """
         Cache a new question-answer pair with context awareness and TTL.
 
@@ -391,7 +388,7 @@ class CacheService:
         """List cache entries with pagination."""
         return await self.cache_repo.list_cache_entries(page, limit, sort_by, order)
 
-    async def get_cache_by_id(self, cache_id: int) -> Optional[dict]:
+    async def get_cache_by_id(self, cache_id: int) -> dict | None:
         """Get single cache entry by ID."""
         return await self.cache_repo.get_cache_by_id(cache_id)
 

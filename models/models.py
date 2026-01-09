@@ -8,8 +8,8 @@ Design decisions:
 """
 
 from datetime import datetime
-from typing import Optional
-from sqlalchemy import String, Text, DateTime, Integer, Float, ForeignKey, Index, JSON
+
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -31,12 +31,12 @@ class Session(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    user_ip: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    user_ip: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     last_activity: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="session", cascade="all, delete-orphan")
-    
+
 
 class Conversation(Base):
     """
@@ -57,16 +57,16 @@ class Conversation(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     # Metadata for analytics
-    tool_calls: Mapped[Optional[str]] = mapped_column(JSON, nullable=True)
+    tool_calls: Mapped[str | None] = mapped_column(JSON, nullable=True)
     evaluator_used: Mapped[bool] = mapped_column(default=False)
-    evaluator_passed: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    evaluator_passed: Mapped[bool | None] = mapped_column(nullable=True)
 
     # Relationship back to Session
     session: Mapped["Session"] = relationship(back_populates="conversations")
 
     # Index for faster queries
     __table_args__ = (
-        Index('ix_conversations_timestamp_desc', timestamp.desc()),
+        Index("ix_conversations_timestamp_desc", timestamp.desc()),
     )
 
 
@@ -95,7 +95,7 @@ class CachedAnswer(Base):
     question: Mapped[str] = mapped_column(Text, nullable=False, index=True)
 
     # Truncated context for debugging (first 200 chars of last assistant message)
-    context_preview: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    context_preview: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # TF-IDF vector for similarity matching
     tfidf_vector: Mapped[str] = mapped_column(Text, nullable=False)
@@ -111,7 +111,7 @@ class CachedAnswer(Base):
     # "knowledge" = standalone questions (30 day TTL)
     # "conversational" = context-dependent replies (24 hour TTL)
     cache_type: Mapped[str] = mapped_column(String(20), default="knowledge", nullable=False)
-    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     # Metadata
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
@@ -120,7 +120,7 @@ class CachedAnswer(Base):
 
     # Indexes for efficient queries
     __table_args__ = (
-        Index('ix_cached_answers_last_used', last_used.desc()),
-        Index('ix_cached_answers_expires_at', expires_at),
-        Index('ix_cached_answers_cache_type', cache_type),
+        Index("ix_cached_answers_last_used", last_used.desc()),
+        Index("ix_cached_answers_expires_at", expires_at),
+        Index("ix_cached_answers_cache_type", cache_type),
     )

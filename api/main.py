@@ -1,13 +1,14 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
+from api.dependencies import get_config
 from api.middleware.cors import setup_cors
 from api.middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from api.middleware.rate_limit_state import rate_limit_state
-from api.routes import health, chat, admin
-from api.dependencies import get_config
+from api.routes import admin, chat, health
 from database import close_database
 
 
@@ -65,6 +66,7 @@ async def root():
 
 if __name__ == "__main__":
     import os
+
     import uvicorn
     port = int(os.getenv("PORT", "8000"))
     uvicorn.run(app,

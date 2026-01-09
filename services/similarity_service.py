@@ -13,8 +13,8 @@ Design notes:
 """
 
 import json
+
 import numpy as np
-from typing import Optional
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -39,7 +39,7 @@ class SimilarityService:
         self.threshold = threshold
         self.vectorizer = TfidfVectorizer(
             lowercase=True,
-            stop_words='english',
+            stop_words="english",
             ngram_range=(1, 2),  # Unigrams and bigrams
             max_features=1000
         )
@@ -105,7 +105,7 @@ class SimilarityService:
         self,
         question: str,
         cached_questions: list[dict]
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """
         Find the best matching cached question above threshold.
 

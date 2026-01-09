@@ -5,11 +5,10 @@ Provides IP-based rate limiting for API endpoints to prevent abuse.
 Configured to allow 15 requests per hour per IP address by default.
 """
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from api.middleware.rate_limit_state import rate_limit_state
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 
 def rate_limit_exceeded_handler(request: Request, exc) -> JSONResponse:

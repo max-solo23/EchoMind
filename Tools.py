@@ -1,10 +1,10 @@
 import json
-from typing import Optional
+
 from core.interfaces import NotificationProvider
 
 
 class Tools:
-    def __init__(self, message_app: Optional[NotificationProvider] = None):
+    def __init__(self, message_app: NotificationProvider | None = None):
         self.message_app = message_app
         self.record_user_details_json = {
             "name": "record_user_details",

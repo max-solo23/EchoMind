@@ -1,22 +1,40 @@
-from core.llm.provider import LLMProvider
-from typing import Optional, AsyncGenerator
 import json
 import logging
 import re
+from collections.abc import AsyncGenerator
+from typing import Optional
+
+from core.llm.provider import LLMProvider
+
 
 try:
     from openai import (
+        APIConnectionError,
         APIError,
         APITimeoutError,
         RateLimitError,
-        APIConnectionError,
     )
 except ImportError:
     # Fallback if openai package structure is different
-    APIError = Exception
-    APITimeoutError = Exception
-    RateLimitError = Exception
-    APIConnectionError = Exception
+    class APIError(Exception):
+        """Base exception for API-related errors."""
+
+        pass
+
+    class APITimeoutError(APIError):
+        """Exception raised when API request times out."""
+
+        pass
+
+    class RateLimitError(APIError):
+        """Exception raised when rate limit is exceeded."""
+
+        pass
+
+    class APIConnectionError(APIError):
+        """Exception raised when there's a connection error to the API."""
+
+        pass
 
 
 logger = logging.getLogger(__name__)
@@ -24,18 +42,19 @@ logger = logging.getLogger(__name__)
 
 class InvalidMessageError(Exception):
     """Raised when a message fails validation."""
+
     pass
 
 
 class Chat:
     def __init__(
-            self,
-            person,
-            llm: LLMProvider,
-            llm_model: str,
-            llm_tools,
-            evaluator_llm: Optional["EvaluatorAgent"] = None,
-        ):
+        self,
+        person,
+        llm: LLMProvider,
+        llm_model: str,
+        llm_tools,
+        evaluator_llm: Optional["EvaluatorAgent"] = None,  # noqa: F821
+    ):
         self.llm = llm
         self.llm_model = llm_model
         self.llm_tools = llm_tools
@@ -74,15 +93,14 @@ class Chat:
 
         # Count alphabetic characters (supports multiple languages)
         # Pattern includes Latin, Cyrillic, and common accented characters
-        letter_pattern = r'[a-zA-ZàèéìòùáéíóúäëïöüāēīōūаеёиоуыэюяґєіїÀÈÉÌÒÙÁÉÍÓÚÄËÏÖÜĀĒĪŌŪАЕЁИОУЫЭЮЯҐЄІЇ]'
+        letter_pattern = (
+            r"[a-zA-ZàèéìòùáéíóúäëïöüāēīōūаеёиоуыэюяґєіїÀÈÉÌÒÙÁÉÍÓÚÄËÏÖÜĀĒĪŌŪАЕЁИОУЫЭЮЯҐЄІЇ]"
+        )
         letters = len(re.findall(letter_pattern, no_spaces))
         total = len(no_spaces)
 
         # At least 30% should be letters
-        if total > 0 and (letters / total) < 0.3:
-            return False
-
-        return True
+        return total <= 0 or (letters / total) >= 0.3
 
     def chat(self, message: str, history: list[dict]) -> str:
         """
@@ -108,11 +126,11 @@ class Chat:
 
         person_system_prompt = self.person.system_prompt
 
-        messages = [
-            {"role": "system", "content": person_system_prompt}
-        ] + history + [
-            {"role": "user", "content": message}
-        ]
+        messages = (
+            [{"role": "system", "content": person_system_prompt}]
+            + history
+            + [{"role": "user", "content": message}]
+        )
 
         try:
             done = False
@@ -126,7 +144,9 @@ class Chat:
                 if finish_reason == "tool_calls":
                     tool_calls = msg.tool_calls
                     results = self.llm_tools.handle_tool_call(tool_calls)
-                    messages.append({"role": "assistant", "content": msg.content, "tool_calls": tool_calls})
+                    messages.append(
+                        {"role": "assistant", "content": msg.content, "tool_calls": tool_calls}
+                    )
                     messages.extend(results)
                 else:
                     done = True
@@ -140,7 +160,9 @@ class Chat:
                 else:
                     logger.debug("Failed evaluation - rerunning")
                     logger.debug(f"Feedback: {evaluation.feedback}")
-                    reply = self.rerun(reply, message, history, evaluation.feedback, self.person.system_prompt)
+                    reply = self.rerun(
+                        reply, message, history, evaluation.feedback, self.person.system_prompt
+                    )
             return reply
 
         except RateLimitError as e:
@@ -159,15 +181,20 @@ class Chat:
             logger.error(f"Unexpected error in chat: {type(e).__name__} - {e}")
             return "I encountered an unexpected issue. Please try again or rephrase your question."
 
-    def rerun(self, reply: str, message: str, history: list[dict], feedback: str, system_prompt: str) -> str:
-        updated_system_prompt = system_prompt + f"\n\n## Previous answer rejected\nYou just tried to reply, but the \
+    def rerun(
+        self, reply: str, message: str, history: list[dict], feedback: str, system_prompt: str
+    ) -> str:
+        updated_system_prompt = (
+            system_prompt
+            + f"\n\n## Previous answer rejected\nYou just tried to reply, but the \
         quality control rejected your reply\n ## Your attempted answer:\n{reply}\n\n ## Reason \
         for rejection:\n{feedback}\n\n"
-        messages = [
-            {"role": "system", "content": updated_system_prompt}
-                   ] + history + [
-            {"role": "user", "content": message}
-        ]
+        )
+        messages = (
+            [{"role": "system", "content": updated_system_prompt}]
+            + history
+            + [{"role": "user", "content": message}]
+        )
         response = self.llm.complete(model=self.llm_model, messages=messages)
         return response.message.content or ""
 
@@ -180,11 +207,11 @@ class Chat:
         """
         person_system_prompt = self.person.system_prompt
 
-        messages = [
-            {"role": "system", "content": person_system_prompt}
-        ] + history + [
-            {"role": "user", "content": message}
-        ]
+        messages = (
+            [{"role": "system", "content": person_system_prompt}]
+            + history
+            + [{"role": "user", "content": message}]
+        )
 
         try:
             # Kick-start streaming for proxies/browsers that buffer small chunks.
@@ -197,24 +224,32 @@ class Chat:
 
                 # Only pass tools if provider supports them
                 tools = self.llm_tools.tools if self.supports_tools else None
-                async for delta in self.llm.stream(model=self.llm_model, messages=messages, tools=tools):
+                async for delta in self.llm.stream(
+                    model=self.llm_model, messages=messages, tools=tools
+                ):
                     if delta.content:
                         event = {"delta": delta.content, "metadata": None}
-                        yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+                        yield f"data: {json.dumps(event)}\n\n".encode()
 
                     if delta.tool_calls:
                         for tool_call in delta.tool_calls:
                             if len(tool_calls_accumulator) <= tool_call.index:
-                                tool_calls_accumulator.append({
-                                    "id": tool_call.id,
-                                    "type": "function",
-                                    "function": {"name": "", "arguments": ""}
-                                })
+                                tool_calls_accumulator.append(
+                                    {
+                                        "id": tool_call.id,
+                                        "type": "function",
+                                        "function": {"name": "", "arguments": ""},
+                                    }
+                                )
 
                             if tool_call.name:
-                                tool_calls_accumulator[tool_call.index]["function"]["name"] = tool_call.name
+                                tool_calls_accumulator[tool_call.index]["function"]["name"] = (
+                                    tool_call.name
+                                )
                             if tool_call.arguments:
-                                tool_calls_accumulator[tool_call.index]["function"]["arguments"] += tool_call.arguments
+                                tool_calls_accumulator[tool_call.index]["function"][
+                                    "arguments"
+                                ] += tool_call.arguments
 
                     if delta.finish_reason is not None:
                         finish_reason = delta.finish_reason
@@ -225,41 +260,54 @@ class Chat:
                         tool_name = tc["function"]["name"]
 
                         # Yield tool call start event
-                        event = {"delta": None, "metadata": {"tool_call": tool_name, "status": "executing"}}
-                        yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+                        event = {
+                            "delta": None,
+                            "metadata": {"tool_call": tool_name, "status": "executing"},
+                        }
+                        yield f"data: {json.dumps(event)}\n\n".encode()
 
                         try:
                             # Execute tool
                             from types import SimpleNamespace
+
                             tool_call_obj = SimpleNamespace(
                                 id=tc["id"],
                                 type=tc["type"],
                                 function=SimpleNamespace(
                                     name=tc["function"]["name"],
-                                    arguments=tc["function"]["arguments"]
-                                )
+                                    arguments=tc["function"]["arguments"],
+                                ),
                             )
                             results = self.llm_tools.handle_tool_call([tool_call_obj])
 
                             # Yield tool call success event
-                            event = {"delta": None, "metadata": {"tool_call": tool_name, "status": "success"}}
-                            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+                            event = {
+                                "delta": None,
+                                "metadata": {"tool_call": tool_name, "status": "success"},
+                            }
+                            yield f"data: {json.dumps(event)}\n\n".encode()
 
                             # Add tool results to messages for next iteration
-                            messages.append({
-                                "role": "assistant",
-                                "content": None,
-                                "tool_calls": tool_calls_accumulator
-                            })
+                            messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": None,
+                                    "tool_calls": tool_calls_accumulator,
+                                }
+                            )
                             messages.extend(results)
 
                         except Exception as e:
                             # Yield tool call failure event
                             event = {
                                 "delta": None,
-                                "metadata": {"tool_call": tool_name, "status": "failed", "error": str(e)}
+                                "metadata": {
+                                    "tool_call": tool_name,
+                                    "status": "failed",
+                                    "error": str(e),
+                                },
                             }
-                            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+                            yield f"data: {json.dumps(event)}\n\n".encode()
                             done = True
                             break
                 else:
@@ -267,26 +315,25 @@ class Chat:
 
             # Yield completion event
             event = {"delta": None, "metadata": {"done": True}}
-            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
-
+            yield f"data: {json.dumps(event)}\n\n".encode()
 
         except RateLimitError as e:
             logger.error(f"LLM rate limit error (streaming): {e}")
             event = {"delta": None, "metadata": {"error": str(e), "code": "rate_limit"}}
-            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+            yield f"data: {json.dumps(event)}\n\n".encode()
         except APITimeoutError as e:
             logger.error(f"LLM timeout error (streaming): {e}")
             event = {"delta": None, "metadata": {"error": str(e), "code": "api_timeout"}}
-            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+            yield f"data: {json.dumps(event)}\n\n".encode()
         except APIConnectionError as e:
             logger.error(f"LLM connection error (streaming): {e}")
             event = {"delta": None, "metadata": {"error": str(e), "code": "connection_error"}}
-            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+            yield f"data: {json.dumps(event)}\n\n".encode()
         except APIError as e:
             logger.error(f"LLM API error (streaming): {e}")
             event = {"delta": None, "metadata": {"error": str(e), "code": "api_error"}}
-            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+            yield f"data: {json.dumps(event)}\n\n".encode()
         except Exception as e:
             logger.error(f"Unexpected error in streaming: {type(e).__name__} - {e}")
             event = {"delta": None, "metadata": {"error": str(e), "code": "unknown_error"}}
-            yield f"data: {json.dumps(event)}\n\n".encode("utf-8")
+            yield f"data: {json.dumps(event)}\n\n".encode()

@@ -8,11 +8,12 @@ Tests ensure that:
 - Rate limits reset after time window
 """
 
+import os
+import time
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
-import time
-import os
 
 from api.main import app
 

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 from openai import AsyncOpenAI, OpenAI
 
 from core.llm.provider import LLMProvider
 from core.llm.types import CompletionMessage, CompletionResponse, StreamDelta, ToolCallDelta
+
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
 
 
 class OpenAICompatibleProvider(LLMProvider):

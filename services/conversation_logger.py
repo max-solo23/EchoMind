@@ -13,8 +13,9 @@ Design:
 - Supports context-aware caching to prevent cross-conversation contamination
 """
 
-from typing import Optional
+
 from repositories.conversation_repo import SQLAlchemyConversationRepository
+
 from .cache_service import CacheService
 
 
@@ -48,7 +49,7 @@ class ConversationLogger:
     async def get_or_create_session(
         self,
         session_id: str,
-        user_ip: Optional[str] = None
+        user_ip: str | None = None
     ) -> int:
         """
         Get existing session or create new one.
@@ -65,9 +66,9 @@ class ConversationLogger:
     async def check_cache(
         self,
         question: str,
-        last_assistant_message: Optional[str] = None,
+        last_assistant_message: str | None = None,
         is_continuation: bool = False
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Check if we have a cached answer for this question with context.
 
@@ -100,11 +101,11 @@ class ConversationLogger:
         session_db_id: int,
         user_message: str,
         bot_response: str,
-        tool_calls: Optional[list] = None,
+        tool_calls: list | None = None,
         evaluator_used: bool = False,
-        evaluator_passed: Optional[bool] = None,
+        evaluator_passed: bool | None = None,
         cache_response: bool = True,
-        last_assistant_message: Optional[str] = None,
+        last_assistant_message: str | None = None,
         is_continuation: bool = False
     ) -> int:
         """
@@ -153,7 +154,7 @@ class ConversationLogger:
 
         return conversation_id
 
-    async def get_session_history(self, session_id: str) -> Optional[dict]:
+    async def get_session_history(self, session_id: str) -> dict | None:
         """
         Get all conversations for a session.
 
@@ -216,7 +217,7 @@ class ConversationLogger:
         """List cache entries with pagination."""
         return await self.cache_service.list_cache_entries(page, limit, sort_by, order)
 
-    async def get_cache_entry(self, cache_id: int) -> Optional[dict]:
+    async def get_cache_entry(self, cache_id: int) -> dict | None:
         """Get single cache entry by ID."""
         return await self.cache_service.get_cache_by_id(cache_id)
 

@@ -1,12 +1,11 @@
-from typing import Protocol, Any, runtime_checkable
-from datetime import datetime
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
 class LLMProvider(Protocol):
     """
     Interface for any LLM provider (OpenAI, Anthropic, Google, Deepseek, local models)
-    
+
     This protocol defines the contract that any LLM provider must fulfill
     to work with our Chat and Evaluator services.
     """
@@ -86,7 +85,7 @@ class ConversationRepository(Protocol):
         """Get session by session_id string."""
         ...
 
-    
+
 @runtime_checkable
 class CacheRepository(Protocol):
     """Interface for cache data access."""
@@ -94,7 +93,7 @@ class CacheRepository(Protocol):
     async def get_cache_by_question(self, question: str) -> dict | None:
         """Get cached answer for exact question match."""
         ...
-    
+
     async def create_cache(self, question: str, tfidf_vector: str, answer: str) -> int:
         """Create new cache entry with first variation."""
         ...

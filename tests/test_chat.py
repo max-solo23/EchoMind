@@ -8,6 +8,7 @@ Key concepts tested:
 4. Exception handling
 """
 import pytest
+
 from Chat import Chat, InvalidMessageError
 from Me import Me
 

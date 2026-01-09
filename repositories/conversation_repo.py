@@ -7,12 +7,13 @@ Learning notes:
 - Handles errors and rollbacks
 """
 
-from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
-from sqlalchemy.orm import selectinload
-from models.models import Session, Conversation
 import json
+
+from sqlalchemy import desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from models.models import Conversation, Session
 
 
 class SQLAlchemyConversationRepository:
@@ -29,7 +30,7 @@ class SQLAlchemyConversationRepository:
         """
         self.session = session
 
-    async def create_session(self, session_id: str, user_ip: Optional[str]) -> int:
+    async def create_session(self, session_id: str, user_ip: str | None) -> int:
         """
         Create new session or return existing.
 
@@ -57,9 +58,9 @@ class SQLAlchemyConversationRepository:
         session_db_id: int,
         user_message: str,
         bot_response: str,
-        tool_calls: Optional[list] = None,
+        tool_calls: list | None = None,
         evaluator_used: bool = False,
-        evaluator_passed: Optional[bool] = None
+        evaluator_passed: bool | None = None
     ) -> int:
         """Log conversation linked to session."""
 
@@ -78,7 +79,7 @@ class SQLAlchemyConversationRepository:
 
         return conversation.id
 
-    async def get_session_by_id(self, session_id: str) -> Optional[dict]:
+    async def get_session_by_id(self, session_id: str) -> dict | None:
         """Get session with all conversations."""
 
         result = await self.session.execute(
@@ -134,10 +135,7 @@ class SQLAlchemyConversationRepository:
         else:
             sort_col = Session.created_at
 
-        if order == "desc":
-            query = query.order_by(desc(sort_col))
-        else:
-            query = query.order_by(sort_col)
+        query = query.order_by(desc(sort_col)) if order == "desc" else query.order_by(sort_col)
 
         query = query.offset(offset).limit(limit)
 

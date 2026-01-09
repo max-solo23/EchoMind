@@ -1,13 +1,14 @@
-from Evaluation import Evaluation
-from core.llm.provider import LLMProvider
 import json
+
+from core.llm.provider import LLMProvider
+from Evaluation import Evaluation
 
 
 class EvaluatorAgent:
     def __init__(
-            self, 
-            persona, 
-            llm: LLMProvider, 
+            self,
+            persona,
+            llm: LLMProvider,
             model
         ):
         self.name = persona.name
@@ -25,7 +26,7 @@ class EvaluatorAgent:
         Here's the information:"
 
         self.evaluator_system_prompt += f"\n\n## Summary:\n{self.summary}\n\n"
-        self.evaluator_system_prompt += f"With this context, please evaluate the latest response, replying with whether \
+        self.evaluator_system_prompt += "With this context, please evaluate the latest response, replying with whether \
         the response is acceptable and your feedback."
 
     def evaluator_user_prompt(self, reply, message, history):
@@ -60,7 +61,7 @@ class EvaluatorAgent:
         fallback_messages = messages + [
             {
                 "role": "system",
-                "content": "Return ONLY valid JSON matching: {\"is_acceptable\": boolean, \"feedback\": string}",
+                "content": 'Return ONLY valid JSON matching: {"is_acceptable": boolean, "feedback": string}',
             }
         ]
         response = self.llm.complete(model=self.model, messages=fallback_messages)

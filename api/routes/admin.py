@@ -9,21 +9,20 @@ Provides endpoints for:
 All admin endpoints require API key authentication.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
 from enum import Enum
 
-from api.middleware.auth import verify_api_key
-from api.middleware.rate_limit_state import rate_limit_state
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.dependencies import (
-    get_db_session,
     get_conversation_logger,
+    get_db_session,
     is_database_configured,
 )
-from services.conversation_logger import ConversationLogger
+from api.middleware.auth import verify_api_key
+from api.middleware.rate_limit_state import rate_limit_state
 
 
 router = APIRouter(
@@ -57,7 +56,7 @@ class ConversationItem(BaseModel):
 class SessionHistory(BaseModel):
     id: int
     session_id: str
-    user_ip: Optional[str]
+    user_ip: str | None
     created_at: datetime
     conversations: list[ConversationItem]
 
@@ -65,13 +64,13 @@ class SessionHistory(BaseModel):
 class DatabaseStatus(BaseModel):
     configured: bool
     connected: bool
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class AdminHealthResponse(BaseModel):
     status: str
     database: DatabaseStatus
-    cache: Optional[CacheStats] = None
+    cache: CacheStats | None = None
 
 
 # New response models for pagination
@@ -79,9 +78,9 @@ class AdminHealthResponse(BaseModel):
 class SessionSummary(BaseModel):
     id: int
     session_id: str
-    user_ip: Optional[str]
+    user_ip: str | None
     created_at: datetime
-    last_activity: Optional[datetime]
+    last_activity: datetime | None
     message_count: int
 
 
@@ -95,31 +94,31 @@ class SessionListResponse(BaseModel):
 
 class CacheEntry(BaseModel):
     id: int
-    cache_key: Optional[str] = None
+    cache_key: str | None = None
     question: str
-    context_preview: Optional[str] = None
+    context_preview: str | None = None
     variations: list[str]
     variation_index: int
     cache_type: str = "knowledge"
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     hit_count: int
-    created_at: Optional[datetime]
-    last_used: Optional[datetime]
+    created_at: datetime | None
+    last_used: datetime | None
 
 
 class CacheEntryDetail(BaseModel):
     id: int
-    cache_key: Optional[str] = None
+    cache_key: str | None = None
     question: str
-    context_preview: Optional[str] = None
-    tfidf_vector: Optional[str]
+    context_preview: str | None = None
+    tfidf_vector: str | None
     variations: list[str]
     variation_index: int
     cache_type: str = "knowledge"
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     hit_count: int
-    created_at: Optional[datetime]
-    last_used: Optional[datetime]
+    created_at: datetime | None
+    last_used: datetime | None
 
 
 class CacheListResponse(BaseModel):
@@ -132,13 +131,13 @@ class CacheListResponse(BaseModel):
 
 class CacheSearchResult(BaseModel):
     id: int
-    cache_key: Optional[str] = None
+    cache_key: str | None = None
     question: str
-    context_preview: Optional[str] = None
+    context_preview: str | None = None
     cache_type: str = "knowledge"
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     hit_count: int
-    last_used: Optional[datetime]
+    last_used: datetime | None
 
 
 class CacheSearchResponse(BaseModel):
@@ -199,8 +198,8 @@ class RateLimitSettings(BaseModel):
 
 
 class UpdateRateLimitRequest(BaseModel):
-    enabled: Optional[bool] = None
-    rate_per_hour: Optional[int] = Field(None, ge=1, description="Requests per hour (minimum 1)")
+    enabled: bool | None = None
+    rate_per_hour: int | None = Field(None, ge=1, description="Requests per hour (minimum 1)")
 
 
 def require_database():
@@ -604,8 +603,8 @@ async def update_rate_limit_settings(request: UpdateRateLimitRequest):
             rate_per_hour=request.rate_per_hour
         )
         return RateLimitSettings(**rate_limit_state.get_settings())
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+            detail="Invalid request data"
+        ) from None

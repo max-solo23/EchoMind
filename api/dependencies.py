@@ -1,23 +1,24 @@
+from collections.abc import AsyncGenerator
 from functools import lru_cache
-from typing import Optional, AsyncGenerator
 
-from config import Config
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from Chat import Chat
-from Me import Me
-from Tools import Tools
-from EvaluatorAgent import EvaluatorAgent
-from PushOver import PushOver
+from config import Config
 from core.llm import create_llm_provider
 from database import get_session
-from sqlalchemy.ext.asyncio import AsyncSession
-from repositories.conversation_repo import SQLAlchemyConversationRepository
+from EvaluatorAgent import EvaluatorAgent
+from Me import Me
+from PushOver import PushOver
 from repositories.cache_repo import SQLAlchemyCacheRepository
-from services.similarity_service import SimilarityService
+from repositories.conversation_repo import SQLAlchemyConversationRepository
 from services.cache_service import CacheService
 from services.conversation_logger import ConversationLogger
+from services.similarity_service import SimilarityService
+from Tools import Tools
 
 
-@lru_cache()
+@lru_cache
 def get_config() -> Config:
     """
     Get singleton Config instance.
@@ -25,7 +26,7 @@ def get_config() -> Config:
     """
     return Config.from_env()
 
-@lru_cache()
+@lru_cache
 def get_chat_service() -> Chat:
     """
     Get singleton Chat service with all dependencies wired up.
@@ -52,15 +53,15 @@ def get_chat_service() -> Chat:
         )
 
     me = Me(config.persona_name, config.persona_file)
-    evaluator: Optional[EvaluatorAgent] = None
+    evaluator: EvaluatorAgent | None = None
 
     if config.use_evaluator:
         evaluator = EvaluatorAgent(me, llm_provider, config.llm_model)
-    pushover: Optional[PushOver] = None
+    pushover: PushOver | None = None
 
     if config.pushover_token and config.pushover_user:
         pushover = PushOver(config.pushover_token, config.pushover_user)
-    
+
     tools = Tools(pushover)
 
     return Chat(me, llm_provider, config.llm_model, tools, evaluator)

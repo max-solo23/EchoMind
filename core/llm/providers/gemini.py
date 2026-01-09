@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from core.llm.provider import LLMProvider
 from core.llm.types import CompletionMessage, CompletionResponse, StreamDelta
+
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 class GeminiProvider(LLMProvider):

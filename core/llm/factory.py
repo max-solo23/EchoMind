@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from core.llm.provider import LLMProvider
+from typing import TYPE_CHECKING
+
 from core.llm.providers.gemini import GeminiProvider
 from core.llm.providers.openai_compatible import OpenAICompatibleProvider
+
+
+if TYPE_CHECKING:
+    from core.llm.provider import LLMProvider
 
 
 def create_llm_provider(config) -> LLMProvider:

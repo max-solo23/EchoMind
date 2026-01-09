@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from core.llm.types import CompletionResponse, StreamDelta
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from core.llm.types import CompletionResponse, StreamDelta
 
 
 @runtime_checkable

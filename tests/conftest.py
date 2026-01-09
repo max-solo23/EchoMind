@@ -1,9 +1,11 @@
-import pytest
-from config import Config
-from core.llm.types import CompletionResponse, CompletionMessage
-from EvaluatorAgent import Evaluation
-import tempfile
 import os
+import tempfile
+
+import pytest
+
+from config import Config
+from core.llm.types import CompletionMessage, CompletionResponse
+from EvaluatorAgent import Evaluation
 
 
 @pytest.fixture
@@ -84,7 +86,7 @@ def sample_chat_history():
 def temp_persona_file():
     """Create a temporary persona YAML file for testing."""
 
-    temp_file = tempfile.NamedTemporaryFile(
+    temp_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
         mode="w",
         delete=False,
         suffix=".yaml"

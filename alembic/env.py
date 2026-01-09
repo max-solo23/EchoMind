@@ -1,16 +1,17 @@
-import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+import sys
 
-from config import Config
-from models.models import Base
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+from config import Config
+from models.models import Base
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -65,8 +66,9 @@ def run_migrations_online() -> None:
 
     This scenario uses async SQLAlchemy for database connections.
     """
-    from sqlalchemy.ext.asyncio import create_async_engine
     import asyncio
+
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     connectable = create_async_engine(
         app_config.database_url,
