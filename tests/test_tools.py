@@ -7,6 +7,10 @@ Key concepts tested:
 3. Verifying method calls on mocks
 4. Testing tool routing logic
 """
+
+import json
+from unittest.mock import MagicMock
+
 from Tools import Tools
 
 
@@ -38,6 +42,7 @@ def test_record_user_details_without_notification():
 
 def test_record_user_details_with_notification():
     """Test record_user_details sends notification when message_app exists."""
+
     # Create a mock notification provider
     class MockNotificationProvider:
         def __init__(self):
@@ -50,9 +55,7 @@ def test_record_user_details_with_notification():
     tools = Tools(message_app=mock_notifier)
 
     result = tools.record_user_details(
-        email="test@example.com",
-        name="Test User",
-        notes="Interested in something"
+        email="test@example.com", name="Test User", notes="Interested in something"
     )
 
     # Should return success
@@ -67,6 +70,7 @@ def test_record_user_details_with_notification():
 
 def test_record_user_details_with_defaults():
     """Test record_user_details uses default values for optional params."""
+
     class MockNotificationProvider:
         def __init__(self):
             self.messages = []
@@ -97,6 +101,7 @@ def test_record_unknown_question_without_notification():
 
 def test_record_unknown_question_with_notification():
     """Test record_unknown_question sends notification when message_app exists."""
+
     class MockNotificationProvider:
         def __init__(self):
             self.messages = []
@@ -113,3 +118,81 @@ def test_record_unknown_question_with_notification():
     assert result == {"recorded": "ok"}
     assert len(mock_notifier.messages) == 1
     assert question in mock_notifier.messages[0]
+
+
+# Tests for handle_tool_call - the dispatch method
+
+
+def test_handle_tool_call_dispatches_correctly():
+    """
+    Test handle_tool_call routes to correct method.
+
+    Why: LLM returns tool name as string. handle_tool_call must
+    dynamically find and call the right method using getattr.
+    """
+
+    class MockNotificationProvider:
+        def push(self, text: str):
+            pass
+
+    tools = Tools(message_app=MockNotificationProvider())
+
+    mock_tool_call = MagicMock()
+    mock_tool_call.function.name = "record_user_details"
+    mock_tool_call.function.arguments = json.dumps(
+        {"email": "dispatch@test.com", "name": "Test User"}
+    )
+    mock_tool_call.id = "call_123"
+
+    results = tools.handle_tool_call([mock_tool_call])
+
+    assert len(results) == 1
+    assert results[0]["role"] == "tool"
+    assert results[0]["tool_call_id"] == "call_123"
+    assert json.loads(results[0]["content"]) == {"recorded": "ok"}
+
+
+def test_handle_tool_call_unknown_tool_returns_empty():
+    """
+    Test handle_tool_call returns empty dict for unknown tools.
+
+    Why: Malformed LLM response or security probe shouldn't crash.
+    getattr returns None for unknown attributes, ternary returns {}.
+    """
+    tools = Tools()
+
+    mock_tool_call = MagicMock()
+    mock_tool_call.function.name = "nonexistent_tool"
+    mock_tool_call.function.arguments = json.dumps({})
+    mock_tool_call.id = "call_456"
+
+    results = tools.handle_tool_call([mock_tool_call])
+
+    assert len(results) == 1
+    assert json.loads(results[0]["content"]) == {}
+
+
+def test_handle_tool_call_multiple_calls():
+    """
+    Test handle_tool_call processes multiple tool calls.
+
+    Why: LLM can return multiple tool calls in one response.
+    Each must be processed and returned with correct tool_call_id.
+    """
+    tools = Tools(message_app=None)
+
+    call1 = MagicMock()
+    call1.function.name = "record_user_details"
+    call1.function.arguments = json.dumps({"email": "a@test.com"})
+    call1.id = "call_1"
+
+    call2 = MagicMock()
+    call2.function.name = "record_unknown_question"
+    call2.function.arguments = json.dumps({"question": "Test?"})
+    call2.id = "call_2"
+
+    results = tools.handle_tool_call([call1, call2])
+
+    assert len(results) == 2
+    assert results[0]["tool_call_id"] == "call_1"
+    assert results[1]["tool_call_id"] == "call_2"

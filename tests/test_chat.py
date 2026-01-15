@@ -7,6 +7,7 @@ Key concepts tested:
 3. Chat flow with history
 4. Exception handling
 """
+
 import pytest
 
 from Chat import Chat, InvalidMessageError
@@ -46,19 +47,16 @@ class TestChatBasics:
     @pytest.fixture
     def mock_tools(self):
         """Create a mock Tools object."""
+
         class MockTools:
             tools = []  # Empty tools list
+
         return MockTools()
 
     def test_chat_initialization(self, mock_llm_provider, temp_persona_file, mock_tools):
         """Test that Chat can be initialized."""
         me = Me(name="Test User", persona_yaml_file=temp_persona_file)
-        chat = Chat(
-            person=me,
-            llm=mock_llm_provider,
-            llm_model="test-model",
-            llm_tools=mock_tools
-        )
+        chat = Chat(person=me, llm=mock_llm_provider, llm_model="test-model", llm_tools=mock_tools)
 
         assert chat.llm == mock_llm_provider
         assert chat.llm_model == "test-model"
@@ -67,27 +65,19 @@ class TestChatBasics:
     def test_chat_basic_response(self, mock_llm_provider, temp_persona_file, mock_tools):
         """Test basic chat response without history."""
         me = Me(name="Test User", persona_yaml_file=temp_persona_file)
-        chat = Chat(
-            person=me,
-            llm=mock_llm_provider,
-            llm_model="test-model",
-            llm_tools=mock_tools
-        )
+        chat = Chat(person=me, llm=mock_llm_provider, llm_model="test-model", llm_tools=mock_tools)
 
         response = chat.chat("Hello", [])
 
         # Should return the mock response
         assert response == "Mock LLM response"
 
-    def test_chat_with_history(self, mock_llm_provider, temp_persona_file, sample_chat_history, mock_tools):
+    def test_chat_with_history(
+        self, mock_llm_provider, temp_persona_file, sample_chat_history, mock_tools
+    ):
         """Test chat with conversation history."""
         me = Me(name="Test User", persona_yaml_file=temp_persona_file)
-        chat = Chat(
-            person=me,
-            llm=mock_llm_provider,
-            llm_model="test-model",
-            llm_tools=mock_tools
-        )
+        chat = Chat(person=me, llm=mock_llm_provider, llm_model="test-model", llm_tools=mock_tools)
 
         response = chat.chat("Tell me more", sample_chat_history)
 
@@ -97,12 +87,7 @@ class TestChatBasics:
     def test_chat_rejects_invalid_message(self, mock_llm_provider, temp_persona_file, mock_tools):
         """Test that invalid messages raise InvalidMessageError."""
         me = Me(name="Test User", persona_yaml_file=temp_persona_file)
-        chat = Chat(
-            person=me,
-            llm=mock_llm_provider,
-            llm_model="test-model",
-            llm_tools=mock_tools
-        )
+        chat = Chat(person=me, llm=mock_llm_provider, llm_model="test-model", llm_tools=mock_tools)
 
         # Too short message should raise exception
         with pytest.raises(InvalidMessageError) as exc_info:
@@ -113,12 +98,7 @@ class TestChatBasics:
     def test_chat_rejects_gibberish(self, mock_llm_provider, temp_persona_file, mock_tools):
         """Test that gibberish is rejected."""
         me = Me(name="Test User", persona_yaml_file=temp_persona_file)
-        chat = Chat(
-            person=me,
-            llm=mock_llm_provider,
-            llm_model="test-model",
-            llm_tools=mock_tools
-        )
+        chat = Chat(person=me, llm=mock_llm_provider, llm_model="test-model", llm_tools=mock_tools)
 
         with pytest.raises(InvalidMessageError):
             chat.chat("!@#$%^&*()", [])

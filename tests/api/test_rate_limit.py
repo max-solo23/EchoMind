@@ -30,6 +30,7 @@ def client(monkeypatch):
 
     # Mock the config dependency to return test config
     from config import Config
+
     test_config = Config(
         llm_provider="openai",
         llm_api_key="test-key-123",
@@ -42,13 +43,15 @@ def client(monkeypatch):
         pushover_user=None,
         api_key="test-api-key",
         allowed_origins=["http://localhost:3000"],
-        rate_limit_per_hour=15  # Test expects 15 requests
+        rate_limit_per_hour=15,  # Test expects 15 requests
     )
 
     # Patch in multiple places where get_config is called
-    with patch("api.dependencies.get_config", return_value=test_config), \
-         patch("api.main.get_config", return_value=test_config), \
-         patch("api.middleware.auth.get_config", return_value=test_config):
+    with (
+        patch("api.dependencies.get_config", return_value=test_config),
+        patch("api.main.get_config", return_value=test_config),
+        patch("api.middleware.auth.get_config", return_value=test_config),
+    ):
         yield TestClient(app)
 
 
@@ -90,15 +93,15 @@ class TestRateLimiting:
             response = client.post(
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
-                headers={"X-API-Key": "test-api-key"}
+                headers={"X-API-Key": "test-api-key"},
             )
-            assert response.status_code == 200, f"Request {i+1} should succeed"
+            assert response.status_code == 200, f"Request {i + 1} should succeed"
 
         # 16th request should be rate limited
         response = client.post(
             "/api/v1/chat",
             json={"message": "test 16", "history": []},
-            headers={"X-API-Key": "test-api-key"}
+            headers={"X-API-Key": "test-api-key"},
         )
         assert response.status_code == 429
         assert "error" in response.json()
@@ -111,14 +114,14 @@ class TestRateLimiting:
             client.post(
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
-                headers={"X-API-Key": "test-api-key"}
+                headers={"X-API-Key": "test-api-key"},
             )
 
         # Check 429 response format
         response = client.post(
             "/api/v1/chat",
             json={"message": "test", "history": []},
-            headers={"X-API-Key": "test-api-key"}
+            headers={"X-API-Key": "test-api-key"},
         )
         assert response.status_code == 429
 
@@ -136,14 +139,14 @@ class TestRateLimiting:
             client.post(
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
-                headers={"X-API-Key": "test-api-key"}
+                headers={"X-API-Key": "test-api-key"},
             )
 
         # Check Retry-After header
         response = client.post(
             "/api/v1/chat",
             json={"message": "test", "history": []},
-            headers={"X-API-Key": "test-api-key"}
+            headers={"X-API-Key": "test-api-key"},
         )
         assert response.status_code == 429
         assert "retry-after" in response.headers
@@ -154,14 +157,14 @@ class TestRateLimiting:
         # Make many requests to health endpoint
         for i in range(20):
             response = client.get("/health")
-            assert response.status_code == 200, f"Health check {i+1} should always succeed"
+            assert response.status_code == 200, f"Health check {i + 1} should always succeed"
 
     def test_root_endpoint_not_rate_limited(self, client):
         """Test that root endpoint is NOT rate limited."""
         # Make many requests to root endpoint
         for i in range(20):
             response = client.get("/")
-            assert response.status_code == 200, f"Root request {i+1} should always succeed"
+            assert response.status_code == 200, f"Root request {i + 1} should always succeed"
 
     def test_rate_limit_applies_before_auth(self, client, mock_chat_service):
         """Test that rate limiting happens before authentication."""
@@ -170,7 +173,7 @@ class TestRateLimiting:
             client.post(
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
-                headers={"X-API-Key": "test-api-key"}
+                headers={"X-API-Key": "test-api-key"},
             )
 
         # Next request should be rate limited even with invalid API key
@@ -178,7 +181,7 @@ class TestRateLimiting:
         response = client.post(
             "/api/v1/chat",
             json={"message": "test", "history": []},
-            headers={"X-API-Key": "invalid-key"}
+            headers={"X-API-Key": "invalid-key"},
         )
         # Could be 429 (rate limit) or 401 (auth) depending on middleware order
         # Our design specifies rate limit should come first
@@ -191,14 +194,14 @@ class TestRateLimiting:
             client.post(
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
-                headers={"X-API-Key": "test-api-key"}
+                headers={"X-API-Key": "test-api-key"},
             )
 
         # Streaming request should also be rate limited
         response = client.post(
             "/api/v1/chat?stream=true",
             json={"message": "test", "history": []},
-            headers={"X-API-Key": "test-api-key"}
+            headers={"X-API-Key": "test-api-key"},
         )
         assert response.status_code == 429
 
@@ -240,10 +243,7 @@ class TestRateLimitIntegration:
             response = client.post(
                 "/api/v1/chat",
                 json={"message": f"test {i}", "history": []},
-                headers={
-                    "X-API-Key": "test-api-key",
-                    "X-Forwarded-For": "192.168.1.100"
-                }
+                headers={"X-API-Key": "test-api-key", "X-Forwarded-For": "192.168.1.100"},
             )
             assert response.status_code == 200
 
@@ -251,9 +251,6 @@ class TestRateLimitIntegration:
         response = client.post(
             "/api/v1/chat",
             json={"message": "test", "history": []},
-            headers={
-                "X-API-Key": "test-api-key",
-                "X-Forwarded-For": "192.168.1.100"
-            }
+            headers={"X-API-Key": "test-api-key", "X-Forwarded-For": "192.168.1.100"},
         )
         assert response.status_code == 429
