@@ -26,6 +26,7 @@ def get_config() -> Config:
     """
     return Config.from_env()
 
+
 @lru_cache
 def get_chat_service() -> Chat:
     """
@@ -88,9 +89,7 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def get_conversation_logger(
-    session: AsyncSession
-) -> ConversationLogger:
+async def get_conversation_logger(session: AsyncSession) -> ConversationLogger:
     """
     Create ConversationLogger with all dependencies.
 
@@ -106,9 +105,7 @@ async def get_conversation_logger(
     cache_service = CacheService(cache_repo, similarity_service)
 
     return ConversationLogger(
-        conversation_repo=conversation_repo,
-        cache_service=cache_service,
-        enable_caching=True
+        conversation_repo=conversation_repo, cache_service=cache_service, enable_caching=True
     )
 
 

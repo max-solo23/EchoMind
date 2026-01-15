@@ -11,6 +11,7 @@ from typing import NamedTuple
 
 class RateLimitSettings(NamedTuple):
     """Immutable snapshot of rate limit settings."""
+
     enabled: bool
     rate_per_hour: int
 
@@ -48,12 +49,9 @@ class RateLimitState:
             Dictionary with enabled and rate_per_hour keys
         """
         with self._lock:
-            return {
-                "enabled": self._enabled,
-                "rate_per_hour": self._rate_per_hour
-            }
+            return {"enabled": self._enabled, "rate_per_hour": self._rate_per_hour}
 
-    def update_settings(self, enabled: bool = None, rate_per_hour: int = None):
+    def update_settings(self, enabled: bool | None = None, rate_per_hour: int | None = None):
         """
         Atomically update rate limit settings.
 

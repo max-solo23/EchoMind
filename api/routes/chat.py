@@ -68,7 +68,7 @@ async def chat_endpoint(
     chat_request: ChatRequest,
     chat_service: Annotated[Chat, Depends(get_chat_service)],
     stream: bool = Query(False, description="Enable streaming response (SSE)"),
-    x_session_id: str | None = Header(None, description="Session ID for conversation tracking")
+    x_session_id: str | None = Header(None, description="Session ID for conversation tracking"),
 ):
     """
     Chat endpoint with optional streaming support and conversation logging.
@@ -107,7 +107,7 @@ async def chat_endpoint(
                     message=chat_request.message,
                     history=chat_request.history,
                     session_id=session_id,
-                    client_ip=client_ip
+                    client_ip=client_ip,
                 ),
                 media_type="text/event-stream",
                 headers={
@@ -124,31 +124,24 @@ async def chat_endpoint(
                 message=chat_request.message,
                 history=chat_request.history,
                 session_id=session_id,
-                client_ip=client_ip
+                client_ip=client_ip,
             )
 
             return ChatResponse(reply=reply)
 
     except InvalidMessageError as e:
         logger.warning(f"Invalid message from {client_ip}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        ) from None
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
     except Exception as e:
         logger.error(f"Chat error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process chat: {str(e)}"
+            detail=f"Failed to process chat: {str(e)}",
         ) from None
 
 
 async def _chat_with_logging(
-    chat_service: Chat,
-    message: str,
-    history: list[dict],
-    session_id: str,
-    client_ip: str | None
+    chat_service: Chat, message: str, history: list[dict], session_id: str, client_ip: str | None
 ) -> str:
     """
     Handle chat with context-aware caching and logging.
@@ -181,7 +174,7 @@ async def _chat_with_logging(
         cached_answer = await conversation_logger.check_cache(
             question=message,
             last_assistant_message=last_assistant_msg,
-            is_continuation=is_continuation
+            is_continuation=is_continuation,
         )
         if cached_answer:
             logger.info(f"Cache hit for session {session_id}")
@@ -193,7 +186,7 @@ async def _chat_with_logging(
                 bot_response=cached_answer,
                 cache_response=False,  # Don't re-cache
                 last_assistant_message=last_assistant_msg,
-                is_continuation=is_continuation
+                is_continuation=is_continuation,
             )
             return cached_answer
 
@@ -209,7 +202,7 @@ async def _chat_with_logging(
             evaluator_used=chat_service.evaluator_llm is not None,
             cache_response=True,
             last_assistant_message=last_assistant_msg,
-            is_continuation=is_continuation
+            is_continuation=is_continuation,
         )
 
         logger.info(f"Logged conversation for session {session_id}")
@@ -217,11 +210,7 @@ async def _chat_with_logging(
 
 
 async def _stream_with_logging(
-    chat_service: Chat,
-    message: str,
-    history: list[dict],
-    session_id: str,
-    client_ip: str | None
+    chat_service: Chat, message: str, history: list[dict], session_id: str, client_ip: str | None
 ) -> AsyncGenerator[bytes, None]:
     """
     Stream chat response with context-aware caching and logging.
@@ -254,7 +243,7 @@ async def _stream_with_logging(
         cached_answer = await conversation_logger.check_cache(
             question=message,
             last_assistant_message=last_assistant_msg,
-            is_continuation=is_continuation
+            is_continuation=is_continuation,
         )
         if cached_answer:
             logger.info(f"Cache hit (streaming) for session {session_id}")
@@ -267,7 +256,7 @@ async def _stream_with_logging(
                 bot_response=cached_answer,
                 cache_response=False,
                 last_assistant_message=last_assistant_msg,
-                is_continuation=is_continuation
+                is_continuation=is_continuation,
             )
 
             # Stream the cached answer as SSE events
@@ -276,13 +265,19 @@ async def _stream_with_logging(
             # Stream cached answer in chunks for natural feel
             chunk_size = 20
             for i in range(0, len(cached_answer), chunk_size):
-                chunk = cached_answer[i:i + chunk_size]
-                event = {"delta": chunk, "metadata": {"cached": True}}
+                text_chunk = cached_answer[i : i + chunk_size]
+                event: dict[str, str | dict[str, bool]] = {
+                    "delta": text_chunk,
+                    "metadata": {"cached": True},
+                }
                 yield f"data: {json.dumps(event)}\n\n".encode()
 
             # Completion event
-            event = {"delta": None, "metadata": {"done": True, "cached": True}}
-            yield f"data: {json.dumps(event)}\n\n".encode()
+            done_event: dict[str, str | None | dict[str, bool]] = {
+                "delta": None,
+                "metadata": {"done": True, "cached": True},
+            }
+            yield f"data: {json.dumps(done_event)}\n\n".encode()
             return
 
     # Cache miss - stream from LLM and accumulate response
@@ -308,7 +303,9 @@ async def _stream_with_logging(
         try:
             async with get_session(config) as session:
                 conversation_logger = await get_conversation_logger(session)
-                session_db_id = await conversation_logger.get_or_create_session(session_id, client_ip)
+                session_db_id = await conversation_logger.get_or_create_session(
+                    session_id, client_ip
+                )
                 await conversation_logger.log_and_cache(
                     session_db_id=session_db_id,
                     user_message=message,
@@ -316,7 +313,7 @@ async def _stream_with_logging(
                     evaluator_used=False,  # Evaluator not used in streaming
                     cache_response=True,
                     last_assistant_message=last_assistant_msg,
-                    is_continuation=is_continuation
+                    is_continuation=is_continuation,
                 )
                 logger.info(f"Logged streaming conversation for session {session_id}")
         except Exception as e:

@@ -13,5 +13,5 @@ class PushOver:
                 "token": self.token,
                 "user": self.user,
                 "message": text,
-            }
+            },
         )

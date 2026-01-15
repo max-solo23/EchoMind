@@ -21,6 +21,7 @@ def build_pushover_client(token: str | None, user: str | None) -> PushOver | Non
     )
     return None
 
+
 config = Config.from_env()
 llm_provider = create_llm_provider(config)
 

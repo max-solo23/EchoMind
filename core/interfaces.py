@@ -14,21 +14,13 @@ class LLMProvider(Protocol):
         """Nested class for chat completion methods."""
 
         def create(
-            self,
-            model: str,
-            messages: list[dict],
-            tools: list[dict] | None = None,
-            **kwargs: Any
+            self, model: str, messages: list[dict], tools: list[dict] | None = None, **kwargs: Any
         ) -> Any:
             """Create a chat completion."""
             ...
 
         def parse(
-            self,
-            model: str,
-            messages: list[dict],
-            response_format: Any,
-            **kwargs: Any
+            self, model: str, messages: list[dict], response_format: Any, **kwargs: Any
         ) -> Any:
             """Create a chat completion with structured output."""
             ...
@@ -70,13 +62,13 @@ class ConversationRepository(Protocol):
         ...
 
     async def log_conversation(
-            self,
-            session_db_id: int,
-            user_message: str,
-            bot_response: str,
-            tool_calls: list | None = None,
-            evaluator_used: bool = False,
-            evaluator_passed: bool | None = None
+        self,
+        session_db_id: int,
+        user_message: str,
+        bot_response: str,
+        tool_calls: list | None = None,
+        evaluator_used: bool = False,
+        evaluator_passed: bool | None = None,
     ) -> int:
         """Log a conversation, return conversation ID."""
         ...

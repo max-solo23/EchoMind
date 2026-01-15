@@ -1,8 +1,6 @@
 {
-  // Python Configuration
   "python.defaultInterpreterPath": "${workspaceFolder}\\venv\\Scripts\\python.exe",
 
-  // Ruff - Linter & Formatter
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true,
@@ -12,33 +10,28 @@
     }
   },
 
-  // Ruff Extension Settings
   "ruff.enable": true,
   "ruff.lint.enable": true,
   "ruff.format.args": [],
   "ruff.importStrategy": "fromEnvironment",
   "ruff.organizeImports": true,
 
-  // Mypy - Type Checker
   "python.linting.enabled": true,
   "python.linting.mypyEnabled": true,
   "python.linting.mypyArgs": [
     "--config-file=${workspaceFolder}/pyproject.toml"
   ],
 
-  // Pytest
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
   "python.testing.pytestArgs": [
     "tests"
   ],
 
-  // Editor Settings
   "editor.rulers": [100],
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,
 
-  // File Associations
   "files.associations": {
     "*.yaml": "yaml",
     "*.toml": "toml"

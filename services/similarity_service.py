@@ -41,7 +41,7 @@ class SimilarityService:
             lowercase=True,
             stop_words="english",
             ngram_range=(1, 2),  # Unigrams and bigrams
-            max_features=1000
+            max_features=1000,
         )
         self._is_fitted = False
 
@@ -101,11 +101,7 @@ class SimilarityService:
         similarity = cosine_similarity(v1, v2)[0][0]
         return float(similarity)
 
-    def find_best_match(
-        self,
-        question: str,
-        cached_questions: list[dict]
-    ) -> dict | None:
+    def find_best_match(self, question: str, cached_questions: list[dict]) -> dict | None:
         """
         Find the best matching cached question above threshold.
 
@@ -132,10 +128,7 @@ class SimilarityService:
 
             if score >= self.threshold and score > best_score:
                 best_score = score
-                best_match = {
-                    **cached,
-                    "similarity_score": score
-                }
+                best_match = {**cached, "similarity_score": score}
 
         return best_match
 

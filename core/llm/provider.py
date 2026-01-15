@@ -26,7 +26,7 @@ class LLMProvider(Protocol):
         tools: list[dict] | None = None,
     ) -> CompletionResponse: ...
 
-    async def stream(
+    def stream(
         self,
         *,
         model: str,
@@ -66,4 +66,3 @@ class LLMProvider(Protocol):
             "streaming": True,
             "structured_output": True,
         }
-

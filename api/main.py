@@ -18,8 +18,7 @@ async def lifespan(app: FastAPI):
     # Startup
     config = get_config()
     rate_limit_state.update_settings(
-        enabled=config.rate_limit_enabled,
-        rate_per_hour=config.rate_limit_per_hour
+        enabled=config.rate_limit_enabled, rate_per_hour=config.rate_limit_per_hour
     )
     yield
     # Shutdown
@@ -31,7 +30,7 @@ app = FastAPI(
     description="Personal AI chatbot API",
     version="1.0.0",
     redoc_url="/redoc",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Configure rate limiting
@@ -58,8 +57,8 @@ async def root():
                 "admin_health": "GET /api/v1/admin/health",
                 "cache_stats": "GET /api/v1/admin/cache/stats",
                 "clear_cache": "DELETE /api/v1/admin/cache",
-                "session_history": "GET /api/v1/admin/sessions/{session_id}"
-            }
+                "session_history": "GET /api/v1/admin/sessions/{session_id}",
+            },
         }
     )
 
@@ -68,11 +67,8 @@ if __name__ == "__main__":
     import os
 
     import uvicorn
+
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run(app,
-                host="0.0.0.0",
-                port=port,
-                timeout_keep_alive=300,
-                log_level="info",
-                access_log=True
-            )
+    uvicorn.run(
+        app, host="0.0.0.0", port=port, timeout_keep_alive=300, log_level="info", access_log=True
+    )

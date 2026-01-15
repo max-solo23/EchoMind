@@ -33,4 +33,3 @@ class CompletionMessage:
 class CompletionResponse:
     finish_reason: str | None
     message: CompletionMessage
-

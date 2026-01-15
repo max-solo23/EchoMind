@@ -70,6 +70,9 @@ def run_migrations_online() -> None:
 
     from sqlalchemy.ext.asyncio import create_async_engine
 
+    if not app_config.database_url:
+        raise RuntimeError("DATABASE_URL or POSTGRES_URL must be set for migrations")
+
     connectable = create_async_engine(
         app_config.database_url,
         poolclass=pool.NullPool,
@@ -80,10 +83,7 @@ def run_migrations_online() -> None:
             await connection.run_sync(run_migrations)
 
     def run_migrations(connection):
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

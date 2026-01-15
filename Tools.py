@@ -1,9 +1,12 @@
 import json
+from typing import Any
 
 from core.interfaces import NotificationProvider
 
 
 class Tools:
+    tools: list[dict[str, Any]]
+
     def __init__(self, message_app: NotificationProvider | None = None):
         self.message_app = message_app
         self.record_user_details_json = {
@@ -12,22 +15,19 @@ class Tools:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "email": {
-                        "type": "string",
-                        "description": "The email address of this user"
-                    },
+                    "email": {"type": "string", "description": "The email address of this user"},
                     "name": {
                         "type": "string",
-                        "description": "The user's name, if they provided it"
+                        "description": "The user's name, if they provided it",
                     },
                     "notes": {
                         "type": "string",
-                        "description": "Any additional information about the conversation that's worth recording to the given context"
-                    }
+                        "description": "Any additional information about the conversation that's worth recording to the given context",
+                    },
                 },
                 "required": ["email"],
-                "additionalProperties": False
-            }
+                "additionalProperties": False,
+            },
         }
 
         self.record_unknown_question_json = {
@@ -38,17 +38,17 @@ class Tools:
                 "properties": {
                     "question": {
                         "type": "string",
-                        "description": "The question that couldn't be answered"
+                        "description": "The question that couldn't be answered",
                     },
                 },
                 "required": ["question"],
-                "additionalProperties": False
-            }
+                "additionalProperties": False,
+            },
         }
 
         self.tools = [
             {"type": "function", "function": self.record_user_details_json},
-            {"type": "function", "function": self.record_unknown_question_json}
+            {"type": "function", "function": self.record_unknown_question_json},
         ]
 
     def record_user_details(self, email, name="Name not provided", notes="not provided"):
@@ -73,7 +73,7 @@ class Tools:
             print(f"Tool called: {tool_name}", flush=True)
             tool = getattr(self, tool_name, None)
             result = tool(**arguments) if tool else {}
-            results.append({"role": "tool", "content": json.dumps(result), "tool_call_id": tool_call.id})
+            results.append(
+                {"role": "tool", "content": json.dumps(result), "tool_call_id": tool_call.id}
+            )
         return results
-
-

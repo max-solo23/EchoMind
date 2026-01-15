@@ -25,11 +25,7 @@ from api.middleware.auth import verify_api_key
 from api.middleware.rate_limit_state import rate_limit_state
 
 
-router = APIRouter(
-    prefix="/api/v1/admin",
-    tags=["admin"],
-    dependencies=[Depends(verify_api_key)]
-)
+router = APIRouter(prefix="/api/v1/admin", tags=["admin"], dependencies=[Depends(verify_api_key)])
 
 
 # Response models
@@ -74,6 +70,7 @@ class AdminHealthResponse(BaseModel):
 
 
 # New response models for pagination
+
 
 class SessionSummary(BaseModel):
     id: int
@@ -207,7 +204,7 @@ def require_database():
     if not is_database_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database not configured. Set POSTGRES_URL environment variable."
+            detail="Database not configured. Set POSTGRES_URL environment variable.",
         )
 
 
@@ -218,10 +215,7 @@ async def admin_health():
 
     Returns system status including database connectivity and cache stats.
     """
-    db_status = DatabaseStatus(
-        configured=is_database_configured(),
-        connected=False
-    )
+    db_status = DatabaseStatus(configured=is_database_configured(), connected=False)
 
     cache_stats = None
 
@@ -242,18 +236,12 @@ async def admin_health():
     return AdminHealthResponse(
         status="healthy" if db_status.connected else "degraded",
         database=db_status,
-        cache=cache_stats
+        cache=cache_stats,
     )
 
 
-@router.get(
-    "/cache/stats",
-    response_model=CacheStats,
-    dependencies=[Depends(require_database)]
-)
-async def get_cache_stats(
-    session: AsyncSession = Depends(get_db_session)
-):
+@router.get("/cache/stats", response_model=CacheStats, dependencies=[Depends(require_database)])
+async def get_cache_stats(session: AsyncSession = Depends(get_db_session)):
     """
     Get cache statistics.
 
@@ -268,13 +256,9 @@ async def get_cache_stats(
 
 
 @router.delete(
-    "/cache",
-    response_model=ClearCacheResponse,
-    dependencies=[Depends(require_database)]
+    "/cache", response_model=ClearCacheResponse, dependencies=[Depends(require_database)]
 )
-async def clear_cache(
-    session: AsyncSession = Depends(get_db_session)
-):
+async def clear_cache(session: AsyncSession = Depends(get_db_session)):
     """
     Clear all cached answers.
 
@@ -288,12 +272,9 @@ async def clear_cache(
 @router.get(
     "/sessions/{session_id}",
     response_model=SessionHistory,
-    dependencies=[Depends(require_database)]
+    dependencies=[Depends(require_database)],
 )
-async def get_session_history(
-    session_id: str,
-    session: AsyncSession = Depends(get_db_session)
-):
+async def get_session_history(session_id: str, session: AsyncSession = Depends(get_db_session)):
     """
     Get conversation history for a session.
 
@@ -308,8 +289,7 @@ async def get_session_history(
 
     if not history:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session '{session_id}' not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Session '{session_id}' not found"
         )
 
     return SessionHistory(
@@ -317,26 +297,22 @@ async def get_session_history(
         session_id=history["session_id"],
         user_ip=history["user_ip"],
         created_at=history["created_at"],
-        conversations=[
-            ConversationItem(**conv)
-            for conv in history["conversations"]
-        ]
+        conversations=[ConversationItem(**conv) for conv in history["conversations"]],
     )
 
 
 # ============= NEW ENDPOINTS =============
 
+
 @router.get(
-    "/sessions",
-    response_model=SessionListResponse,
-    dependencies=[Depends(require_database)]
+    "/sessions", response_model=SessionListResponse, dependencies=[Depends(require_database)]
 )
 async def list_sessions(
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     sort_by: SessionSortBy = Query(SessionSortBy.created_at, description="Sort field"),
     order: SortOrder = Query(SortOrder.desc, description="Sort order"),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
 ):
     """
     List all sessions with pagination.
@@ -351,19 +327,16 @@ async def list_sessions(
         total=result["total"],
         page=result["page"],
         limit=result["limit"],
-        total_pages=result["total_pages"]
+        total_pages=result["total_pages"],
     )
 
 
 @router.delete(
     "/sessions/{session_id}",
     response_model=DeleteSessionResponse,
-    dependencies=[Depends(require_database)]
+    dependencies=[Depends(require_database)],
 )
-async def delete_session(
-    session_id: str,
-    session: AsyncSession = Depends(get_db_session)
-):
+async def delete_session(session_id: str, session: AsyncSession = Depends(get_db_session)):
     """
     Delete a session and all its conversations.
 
@@ -378,21 +351,16 @@ async def delete_session(
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session '{session_id}' not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Session '{session_id}' not found"
         )
 
     return DeleteSessionResponse(success=True, session_id=session_id)
 
 
 @router.delete(
-    "/sessions",
-    response_model=ClearSessionsResponse,
-    dependencies=[Depends(require_database)]
+    "/sessions", response_model=ClearSessionsResponse, dependencies=[Depends(require_database)]
 )
-async def clear_all_sessions(
-    session: AsyncSession = Depends(get_db_session)
-):
+async def clear_all_sessions(session: AsyncSession = Depends(get_db_session)):
     """
     Delete all sessions and their conversations.
 
@@ -407,16 +375,14 @@ async def clear_all_sessions(
 
 
 @router.get(
-    "/cache/entries",
-    response_model=CacheListResponse,
-    dependencies=[Depends(require_database)]
+    "/cache/entries", response_model=CacheListResponse, dependencies=[Depends(require_database)]
 )
 async def list_cache_entries(
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     sort_by: CacheSortBy = Query(CacheSortBy.last_used, description="Sort field"),
     order: SortOrder = Query(SortOrder.desc, description="Sort order"),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
 ):
     """
     List all cache entries with pagination.
@@ -431,19 +397,17 @@ async def list_cache_entries(
         total=result["total"],
         page=result["page"],
         limit=result["limit"],
-        total_pages=result["total_pages"]
+        total_pages=result["total_pages"],
     )
 
 
 @router.get(
-    "/cache/search",
-    response_model=CacheSearchResponse,
-    dependencies=[Depends(require_database)]
+    "/cache/search", response_model=CacheSearchResponse, dependencies=[Depends(require_database)]
 )
 async def search_cache(
     q: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
 ):
     """
     Search cache entries by question text.
@@ -454,20 +418,14 @@ async def search_cache(
     results = await logger.search_cache(q, limit)
 
     return CacheSearchResponse(
-        results=[CacheSearchResult(**r) for r in results],
-        total=len(results)
+        results=[CacheSearchResult(**r) for r in results], total=len(results)
     )
 
 
 @router.get(
-    "/cache/{cache_id}",
-    response_model=CacheEntryDetail,
-    dependencies=[Depends(require_database)]
+    "/cache/{cache_id}", response_model=CacheEntryDetail, dependencies=[Depends(require_database)]
 )
-async def get_cache_entry(
-    cache_id: int,
-    session: AsyncSession = Depends(get_db_session)
-):
+async def get_cache_entry(cache_id: int, session: AsyncSession = Depends(get_db_session)):
     """
     Get single cache entry by ID.
 
@@ -478,8 +436,7 @@ async def get_cache_entry(
 
     if not entry:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cache entry {cache_id} not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Cache entry {cache_id} not found"
         )
 
     return CacheEntryDetail(**entry)
@@ -488,12 +445,10 @@ async def get_cache_entry(
 @router.put(
     "/cache/{cache_id}",
     response_model=UpdateCacheResponse,
-    dependencies=[Depends(require_database)]
+    dependencies=[Depends(require_database)],
 )
 async def update_cache_entry(
-    cache_id: int,
-    request: UpdateCacheRequest,
-    session: AsyncSession = Depends(get_db_session)
+    cache_id: int, request: UpdateCacheRequest, session: AsyncSession = Depends(get_db_session)
 ):
     """
     Update cache entry variations.
@@ -505,25 +460,18 @@ async def update_cache_entry(
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cache entry {cache_id} not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Cache entry {cache_id} not found"
         )
 
-    return UpdateCacheResponse(
-        success=True,
-        updated_at=datetime.utcnow()
-    )
+    return UpdateCacheResponse(success=True, updated_at=datetime.utcnow())
 
 
 @router.delete(
     "/cache/{cache_id}",
     response_model=DeleteCacheResponse,
-    dependencies=[Depends(require_database)]
+    dependencies=[Depends(require_database)],
 )
-async def delete_cache_entry(
-    cache_id: int,
-    session: AsyncSession = Depends(get_db_session)
-):
+async def delete_cache_entry(cache_id: int, session: AsyncSession = Depends(get_db_session)):
     """
     Delete single cache entry by ID.
     """
@@ -532,24 +480,18 @@ async def delete_cache_entry(
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cache entry {cache_id} not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Cache entry {cache_id} not found"
         )
 
-    return DeleteCacheResponse(
-        success=True,
-        deleted_id=cache_id
-    )
+    return DeleteCacheResponse(success=True, deleted_id=cache_id)
 
 
 @router.post(
     "/cache/cleanup",
     response_model=CleanupExpiredResponse,
-    dependencies=[Depends(require_database)]
+    dependencies=[Depends(require_database)],
 )
-async def cleanup_expired_cache(
-    session: AsyncSession = Depends(get_db_session)
-):
+async def cleanup_expired_cache(session: AsyncSession = Depends(get_db_session)):
     """
     Delete all expired cache entries.
 
@@ -565,10 +507,7 @@ async def cleanup_expired_cache(
     return CleanupExpiredResponse(success=True, deleted_count=deleted)
 
 
-@router.get(
-    "/rate-limit",
-    response_model=RateLimitSettings
-)
+@router.get("/rate-limit", response_model=RateLimitSettings)
 async def get_rate_limit_settings():
     """
     Get current rate limit settings.
@@ -580,10 +519,7 @@ async def get_rate_limit_settings():
     return RateLimitSettings(**rate_limit_state.get_settings())
 
 
-@router.post(
-    "/rate-limit",
-    response_model=RateLimitSettings
-)
+@router.post("/rate-limit", response_model=RateLimitSettings)
 async def update_rate_limit_settings(request: UpdateRateLimitRequest):
     """
     Update rate limit settings dynamically.
@@ -599,12 +535,10 @@ async def update_rate_limit_settings(request: UpdateRateLimitRequest):
     """
     try:
         rate_limit_state.update_settings(
-            enabled=request.enabled,
-            rate_per_hour=request.rate_per_hour
+            enabled=request.enabled, rate_per_hour=request.rate_per_hour
         )
         return RateLimitSettings(**rate_limit_state.get_settings())
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid request data"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid request data"
         ) from None

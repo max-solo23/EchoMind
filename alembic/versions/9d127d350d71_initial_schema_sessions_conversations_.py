@@ -1,7 +1,7 @@
 """Initial schema: sessions, conversations, cached_answers
 
 Revision ID: 9d127d350d71
-Revises: 
+Revises:
 Create Date: 2025-12-29 10:57:06.207274
 
 """

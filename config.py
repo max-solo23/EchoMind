@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
@@ -16,17 +16,13 @@ class Config:
     persona_file: str
     use_evaluator: bool = False
     api_key: str = ""
-    allowed_origins: list[str] = None
+    allowed_origins: list[str] = field(default_factory=list)
     rate_limit_enabled: bool = True
     rate_limit_per_hour: int = 10
     database_url: str | None = None
     db_pool_size: int = 10
     db_max_overflow: int = 10
     db_echo: bool = False
-
-    def __post_init__(self):
-        if self.allowed_origins is None:
-            self.allowed_origins = []
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -57,7 +53,7 @@ class Config:
             llm_provider=llm_provider,
             llm_api_key=llm_key,
             llm_base_url=os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL"),
-            llm_model=os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL", "gpt-5.2"),
+            llm_model=os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-5.2",
             pushover_token=os.getenv("PUSHOVER_TOKEN"),
             pushover_user=os.getenv("PUSHOVER_USER"),
             persona_name="Max",
@@ -70,5 +66,5 @@ class Config:
             database_url=database_url,
             db_pool_size=db_pool_size,
             db_max_overflow=db_max_overflow,
-            db_echo=db_echo
+            db_echo=db_echo,
         )

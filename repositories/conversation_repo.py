@@ -9,7 +9,7 @@ Learning notes:
 
 import json
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -37,9 +37,7 @@ class SQLAlchemyConversationRepository:
         Returns: Database ID (integer primary key)
         """
         # Check if session already exists
-        result = await self.session.execute(
-            select(Session).where(Session.session_id == session_id)
-        )
+        result = await self.session.execute(select(Session).where(Session.session_id == session_id))
         existing = result.scalar_one_or_none()
 
         if existing:
@@ -60,7 +58,7 @@ class SQLAlchemyConversationRepository:
         bot_response: str,
         tool_calls: list | None = None,
         evaluator_used: bool = False,
-        evaluator_passed: bool | None = None
+        evaluator_passed: bool | None = None,
     ) -> int:
         """Log conversation linked to session."""
 
@@ -70,7 +68,7 @@ class SQLAlchemyConversationRepository:
             bot_response=bot_response,
             tool_calls=json.dumps(tool_calls) if tool_calls else None,
             evaluator_used=evaluator_used,
-            evaluator_passed=evaluator_passed
+            evaluator_passed=evaluator_passed,
         )
 
         self.session.add(conversation)
@@ -101,18 +99,14 @@ class SQLAlchemyConversationRepository:
                 {
                     "user_message": conv.user_message,
                     "bot_response": conv.bot_response,
-                    "timestamp": conv.timestamp
+                    "timestamp": conv.timestamp,
                 }
                 for conv in session.conversations
-            ]
+            ],
         }
 
     async def list_sessions(
-        self,
-        page: int = 1,
-        limit: int = 20,
-        sort_by: str = "created_at",
-        order: str = "desc"
+        self, page: int = 1, limit: int = 20, sort_by: str = "created_at", order: str = "desc"
     ) -> dict:
         """
         List all sessions with pagination.
@@ -150,14 +144,14 @@ class SQLAlchemyConversationRepository:
                     "user_ip": s.user_ip,
                     "created_at": s.created_at,
                     "last_activity": s.last_activity,
-                    "message_count": len(s.conversations)
+                    "message_count": len(s.conversations),
                 }
                 for s in sessions
             ],
             "total": total,
             "page": page,
             "limit": limit,
-            "total_pages": (total + limit - 1) // limit if total else 0
+            "total_pages": (total + limit - 1) // limit if total else 0,
         }
 
     async def delete_session(self, session_id: str) -> bool:
@@ -170,9 +164,7 @@ class SQLAlchemyConversationRepository:
         Returns:
             True if session was deleted, False if not found
         """
-        result = await self.session.execute(
-            select(Session).where(Session.session_id == session_id)
-        )
+        result = await self.session.execute(select(Session).where(Session.session_id == session_id))
         session_obj = result.scalar_one_or_none()
 
         if not session_obj:
@@ -193,17 +185,13 @@ class SQLAlchemyConversationRepository:
         """
         # Count sessions before deletion
         result = await self.session.execute(select(func.count(Session.id)))
-        count = result.scalar()
+        count = result.scalar() or 0
 
         # Delete conversations first (they reference sessions)
-        await self.session.execute(
-            Conversation.__table__.delete()
-        )
+        await self.session.execute(delete(Conversation))
 
         # Then delete sessions
-        await self.session.execute(
-            Session.__table__.delete()
-        )
+        await self.session.execute(delete(Session))
 
         await self.session.commit()
         return count

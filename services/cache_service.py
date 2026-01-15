@@ -25,7 +25,8 @@ from .similarity_service import SimilarityService
 
 class CacheType(str, Enum):
     """Cache entry classification for TTL purposes."""
-    KNOWLEDGE = "knowledge"          # Standalone questions (30 day TTL)
+
+    KNOWLEDGE = "knowledge"  # Standalone questions (30 day TTL)
     CONVERSATIONAL = "conversational"  # Context-dependent replies (24 hour TTL)
 
 
@@ -39,19 +40,60 @@ CACHE_TTL = {
 # These are only skipped when is_continuation=True (not first turn)
 CACHE_DENYLIST = {
     # Acknowledgements
-    "ok", "okay", "yes", "no", "yeah", "yep", "nope", "yea", "nah",
+    "ok",
+    "okay",
+    "yes",
+    "no",
+    "yeah",
+    "yep",
+    "nope",
+    "yea",
+    "nah",
     # Thanks
-    "thanks", "thank you", "thx", "ty", "thank", "thankyou",
+    "thanks",
+    "thank you",
+    "thx",
+    "ty",
+    "thank",
+    "thankyou",
     # Continuations
-    "continue", "go on", "go ahead", "more", "next",
+    "continue",
+    "go on",
+    "go ahead",
+    "more",
+    "next",
     # Confirmations
-    "sure", "alright", "right", "got it", "understood", "i understand",
+    "sure",
+    "alright",
+    "right",
+    "got it",
+    "understood",
+    "i understand",
     # Reactions
-    "cool", "nice", "great", "awesome", "perfect", "good", "fine",
+    "cool",
+    "nice",
+    "great",
+    "awesome",
+    "perfect",
+    "good",
+    "fine",
     # Fillers
-    "hmm", "hm", "ah", "oh", "i see", "uh", "um", "wow",
+    "hmm",
+    "hm",
+    "ah",
+    "oh",
+    "i see",
+    "uh",
+    "um",
+    "wow",
     # Short responses
-    "k", "kk", "ya", "ye", "na", "lol", "haha",
+    "k",
+    "kk",
+    "ya",
+    "ye",
+    "na",
+    "lol",
+    "haha",
 }
 
 # Minimum token count for caching (unless it's a question)
@@ -71,9 +113,7 @@ class CacheService:
     """
 
     def __init__(
-        self,
-        cache_repo: SQLAlchemyCacheRepository,
-        similarity_service: SimilarityService
+        self, cache_repo: SQLAlchemyCacheRepository, similarity_service: SimilarityService
     ):
         """
         Initialize with dependencies.
@@ -85,11 +125,7 @@ class CacheService:
         self.cache_repo = cache_repo
         self.similarity = similarity_service
 
-    def should_skip_cache(
-        self,
-        message: str,
-        is_continuation: bool = False
-    ) -> bool:
+    def should_skip_cache(self, message: str, is_continuation: bool = False) -> bool:
         """
         Determine if message should bypass cache entirely.
 
@@ -153,11 +189,7 @@ class CacheService:
         """
         return datetime.utcnow() + CACHE_TTL[cache_type]
 
-    def build_cache_key(
-        self,
-        message: str,
-        last_assistant_message: str | None = None
-    ) -> str:
+    def build_cache_key(self, message: str, last_assistant_message: str | None = None) -> str:
         """
         Build context-aware cache key.
 
@@ -178,10 +210,7 @@ class CacheService:
         return hashlib.sha256(combined.encode()).hexdigest()
 
     async def get_cached_answer(
-        self,
-        message: str,
-        last_assistant_message: str | None = None,
-        is_continuation: bool = False
+        self, message: str, last_assistant_message: str | None = None, is_continuation: bool = False
     ) -> str | None:
         """
         Try to find a cached answer for the message with context awareness.
@@ -219,8 +248,7 @@ class CacheService:
 
         # Filter out expired entries
         valid_cached = [
-            c for c in all_cached
-            if not c.get("expires_at") or c["expires_at"] >= datetime.utcnow()
+            c for c in all_cached if not c.get("expires_at") or c["expires_at"] >= datetime.utcnow()
         ]
 
         if not valid_cached:
@@ -242,7 +270,7 @@ class CacheService:
         message: str,
         answer: str,
         last_assistant_message: str | None = None,
-        is_continuation: bool = False
+        is_continuation: bool = False,
     ) -> int | None:
         """
         Cache a new question-answer pair with context awareness and TTL.
@@ -274,8 +302,9 @@ class CacheService:
 
         if existing:
             # Add as variation (if under 3)
-            await self.cache_repo.add_variation(existing["id"], answer)
-            return existing["id"]
+            cache_id: int = existing["id"]
+            await self.cache_repo.add_variation(cache_id, answer)
+            return cache_id
 
         # Create new cache entry
         tfidf_vector = self.similarity.vectorize(message)
@@ -286,14 +315,10 @@ class CacheService:
             answer=answer,
             cache_type=cache_type.value,
             expires_at=expires_at,
-            context_preview=context_preview
+            context_preview=context_preview,
         )
 
-    async def should_cache(
-        self,
-        message: str,
-        is_continuation: bool = False
-    ) -> bool:
+    async def should_cache(self, message: str, is_continuation: bool = False) -> bool:
         """
         Determine if a question should be cached.
 
@@ -362,15 +387,14 @@ class CacheService:
 
         # Count expired
         now = datetime.utcnow()
-        expired_count = sum(
-            1 for c in all_cached
-            if c.get("expires_at") and c["expires_at"] < now
-        )
+        expired_count = sum(1 for c in all_cached if c.get("expires_at") and c["expires_at"] < now)
 
         return {
             "total_questions": total_questions,
             "total_variations": total_variations,
-            "avg_variations_per_question": total_variations / total_questions if total_questions > 0 else 0,
+            "avg_variations_per_question": total_variations / total_questions
+            if total_questions > 0
+            else 0,
             "knowledge_entries": knowledge_count,
             "conversational_entries": conversational_count,
             "expired_entries": expired_count,
@@ -379,11 +403,7 @@ class CacheService:
     # Admin methods
 
     async def list_cache_entries(
-        self,
-        page: int = 1,
-        limit: int = 20,
-        sort_by: str = "last_used",
-        order: str = "desc"
+        self, page: int = 1, limit: int = 20, sort_by: str = "last_used", order: str = "desc"
     ) -> dict:
         """List cache entries with pagination."""
         return await self.cache_repo.list_cache_entries(page, limit, sort_by, order)

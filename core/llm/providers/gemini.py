@@ -66,7 +66,7 @@ class GeminiProvider(LLMProvider):
         candidates = response_json.get("candidates") or []
         if not candidates:
             return ""
-        content = (candidates[0].get("content") or {})
+        content = candidates[0].get("content") or {}
         parts = content.get("parts") or []
         texts: list[str] = []
         for p in parts:
@@ -156,4 +156,3 @@ class GeminiProvider(LLMProvider):
             "streaming": True,
             "structured_output": False,
         }
-

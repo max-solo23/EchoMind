@@ -269,4 +269,3 @@ show_contexts = true                # Show which tests hit which lines
 # JSON report settings
 output = "coverage.json"            # JSON output file
 pretty_print = true                 # Format JSON nicely
-

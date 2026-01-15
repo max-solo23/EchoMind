@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
 
-
 class OpenAICompatibleProvider(LLMProvider):
     """
     OpenAI SDK wrapper that also works with OpenAI-compatible APIs by setting base_url.
@@ -31,7 +30,9 @@ class OpenAICompatibleProvider(LLMProvider):
         default_headers: dict[str, str] | None = None,
     ) -> None:
         self._client = OpenAI(api_key=api_key, base_url=base_url, default_headers=default_headers)
-        self._async_client = AsyncOpenAI(api_key=api_key, base_url=base_url, default_headers=default_headers)
+        self._async_client = AsyncOpenAI(
+            api_key=api_key, base_url=base_url, default_headers=default_headers
+        )
 
     def complete(
         self,
@@ -40,7 +41,11 @@ class OpenAICompatibleProvider(LLMProvider):
         messages: list[dict],
         tools: list[dict] | None = None,
     ) -> CompletionResponse:
-        response = self._client.chat.completions.create(model=model, messages=messages, tools=tools)
+        response = self._client.chat.completions.create(
+            model=model,
+            messages=messages,  # type: ignore[arg-type]
+            tools=tools,  # type: ignore[arg-type]
+        )
         choice = response.choices[0]
         msg = choice.message
         return CompletionResponse(
@@ -61,10 +66,11 @@ class OpenAICompatibleProvider(LLMProvider):
     ) -> AsyncIterator[StreamDelta]:
         stream = await self._async_client.chat.completions.create(
             model=model,
-            messages=messages,
-            tools=tools,
+            messages=messages,  # type: ignore[arg-type]
+            tools=tools,  # type: ignore[arg-type]
             stream=True,
         )
+        assert hasattr(stream, "__aiter__")  # Type guard for streaming response
 
         async for chunk in stream:
             choice = chunk.choices[0]
@@ -99,7 +105,7 @@ class OpenAICompatibleProvider(LLMProvider):
         # Only available for providers that support the OpenAI SDK's structured outputs.
         return self._client.chat.completions.parse(
             model=model,
-            messages=messages,
+            messages=messages,  # type: ignore[arg-type]
             response_format=response_format,
         )
 
@@ -111,4 +117,3 @@ class OpenAICompatibleProvider(LLMProvider):
             "streaming": True,
             "structured_output": True,
         }
-

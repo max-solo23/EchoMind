@@ -22,22 +22,22 @@ try:
     )
 except ImportError:
 
-    class APIError(Exception):
+    class APIError(Exception):  # type: ignore[no-redef]
         """Base exception for API-related errors."""
 
         pass
 
-    class APITimeoutError(APIError):
+    class APITimeoutError(APIError):  # type: ignore[no-redef]
         """Exception raised when API request times out."""
 
         pass
 
-    class RateLimitError(APIError):
+    class RateLimitError(APIError):  # type: ignore[no-redef]
         """Exception raised when rate limit is exceeded."""
 
         pass
 
-    class APIConnectionError(APIError):
+    class APIConnectionError(APIError):  # type: ignore[no-redef]
         """Exception raised when there's a connection error to the API."""
 
         pass
@@ -228,9 +228,7 @@ class Chat:
 
         logger.debug("Failed evaluation - rerunning")
         logger.debug(f"Feedback: {evaluation.feedback}")
-        return self.rerun(
-            reply, message, history, evaluation.feedback, self.person.system_prompt
-        )
+        return self.rerun(reply, message, history, evaluation.feedback, self.person.system_prompt)
 
     def chat(self, message: str, history: list[dict]) -> str:
         """
@@ -323,7 +321,9 @@ class Chat:
             tool_calls_accumulator: list[dict] = []
             finish_reason: str | None = None
 
-            async for delta in self.llm.stream(model=self.llm_model, messages=messages, tools=tools):
+            async for delta in self.llm.stream(
+                model=self.llm_model, messages=messages, tools=tools
+            ):
                 if delta.content:
                     yield SSEEvent(delta=delta.content).encode()
 
@@ -350,11 +350,13 @@ class Chat:
         """Accumulate streaming tool call deltas into complete tool calls."""
         for tool_call in tool_calls:
             while len(accumulator) <= tool_call.index:
-                accumulator.append({
-                    "id": None,
-                    "type": "function",
-                    "function": {"name": "", "arguments": ""},
-                })
+                accumulator.append(
+                    {
+                        "id": None,
+                        "type": "function",
+                        "function": {"name": "", "arguments": ""},
+                    }
+                )
 
             if tool_call.id:
                 accumulator[tool_call.index]["id"] = tool_call.id
@@ -372,23 +374,21 @@ class Chat:
         for tc in tool_calls:
             tool_name = tc["function"]["name"]
 
-            yield SSEEvent(
-                metadata={"tool_call": tool_name, "status": "executing"}
-            ).encode()
+            yield SSEEvent(metadata={"tool_call": tool_name, "status": "executing"}).encode()
 
             try:
                 tool_call_obj = _create_tool_call_object(tc)
                 results = self.llm_tools.handle_tool_call([tool_call_obj])
 
-                yield SSEEvent(
-                    metadata={"tool_call": tool_name, "status": "success"}
-                ).encode()
+                yield SSEEvent(metadata={"tool_call": tool_name, "status": "success"}).encode()
 
-                messages.append({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": tool_calls,
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": tool_calls,
+                    }
+                )
                 messages.extend(results)
 
             except Exception as e:

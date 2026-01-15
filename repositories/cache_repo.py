@@ -2,8 +2,9 @@
 
 import json
 from datetime import datetime
+from typing import cast
 
-from sqlalchemy import delete, desc, func, select
+from sqlalchemy import CursorResult, delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.models import CachedAnswer
@@ -123,7 +124,7 @@ class SQLAlchemyCacheRepository:
         answer: str,
         cache_type: str = "knowledge",
         expires_at: datetime | None = None,
-        context_preview: str | None = None
+        context_preview: str | None = None,
     ) -> int:
         """
         Create new cache entry with context-aware key and TTL.
@@ -166,9 +167,7 @@ class SQLAlchemyCacheRepository:
             cache_id: Cache entry ID
             answer: New answer variation
         """
-        result = await self.session.execute(
-            select(CachedAnswer).where(CachedAnswer.id == cache_id)
-        )
+        result = await self.session.execute(select(CachedAnswer).where(CachedAnswer.id == cache_id))
         cache = result.scalar_one_or_none()
 
         if not cache:
@@ -193,15 +192,13 @@ class SQLAlchemyCacheRepository:
         Returns:
             Answer variation string
         """
-        result = await self.session.execute(
-            select(CachedAnswer).where(CachedAnswer.id == cache_id)
-        )
+        result = await self.session.execute(select(CachedAnswer).where(CachedAnswer.id == cache_id))
         cache = result.scalar_one_or_none()
 
         if not cache:
             return ""
 
-        variations = json.loads(cache.variations)
+        variations: list[str] = json.loads(cache.variations)
         current_index = cache.variation_index
 
         # Get answer at current index
@@ -223,26 +220,26 @@ class SQLAlchemyCacheRepository:
         Returns:
             Number of entries deleted
         """
-        result = await self.session.execute(
-            delete(CachedAnswer).where(
-                CachedAnswer.expires_at < datetime.utcnow()
-            )
+        result = cast(
+            CursorResult[tuple[()]],
+            await self.session.execute(
+                delete(CachedAnswer).where(CachedAnswer.expires_at < datetime.utcnow())
+            ),
         )
         await self.session.commit()
-        return result.rowcount
+        return result.rowcount or 0
 
     async def clear_all_cache(self) -> int:
         """Delete all cached answers."""
-        result = await self.session.execute(delete(CachedAnswer))
+        result = cast(
+            CursorResult[tuple[()]],
+            await self.session.execute(delete(CachedAnswer)),
+        )
         await self.session.commit()
-        return result.rowcount
+        return result.rowcount or 0
 
     async def list_cache_entries(
-        self,
-        page: int = 1,
-        limit: int = 20,
-        sort_by: str = "last_used",
-        order: str = "desc"
+        self, page: int = 1, limit: int = 20, sort_by: str = "last_used", order: str = "desc"
     ) -> dict:
         """
         List cache entries with pagination.
@@ -309,9 +306,7 @@ class SQLAlchemyCacheRepository:
 
     async def get_cache_by_id(self, cache_id: int) -> dict | None:
         """Get single cache entry by ID."""
-        result = await self.session.execute(
-            select(CachedAnswer).where(CachedAnswer.id == cache_id)
-        )
+        result = await self.session.execute(select(CachedAnswer).where(CachedAnswer.id == cache_id))
         cache = result.scalar_one_or_none()
 
         if not cache:
@@ -334,17 +329,16 @@ class SQLAlchemyCacheRepository:
 
     async def delete_cache_by_id(self, cache_id: int) -> bool:
         """Delete single cache entry by ID."""
-        result = await self.session.execute(
-            delete(CachedAnswer).where(CachedAnswer.id == cache_id)
+        result = cast(
+            CursorResult[tuple[()]],
+            await self.session.execute(delete(CachedAnswer).where(CachedAnswer.id == cache_id)),
         )
         await self.session.commit()
-        return result.rowcount > 0
+        return (result.rowcount or 0) > 0
 
     async def update_cache_variations(self, cache_id: int, variations: list[str]) -> bool:
         """Update cache variations (max 3)."""
-        result = await self.session.execute(
-            select(CachedAnswer).where(CachedAnswer.id == cache_id)
-        )
+        result = await self.session.execute(select(CachedAnswer).where(CachedAnswer.id == cache_id))
         cache = result.scalar_one_or_none()
 
         if not cache:

@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel, Field
 
 
@@ -23,11 +22,13 @@ class HealthResponse(BaseModel):
 
 # Streaming response models
 
+
 class StreamEvent(BaseModel):
     """
     SSE event model for streaming chat responses.
 
     Format: {"delta": <string|null>, "metadata": <object|null>}
     """
+
     delta: str | None = Field(None, description="Text content to append")
     metadata: dict | None = Field(None, description="Event metadata")

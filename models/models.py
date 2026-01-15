@@ -15,6 +15,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 class Base(DeclarativeBase):
     """Base class for all database models."""
+
     pass
 
 
@@ -27,15 +28,20 @@ class Session(Base):
     - Analytics: how many questions per session
     - Frontend: display conversation history by session
     """
+
     __tablename__ = "session"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     user_ip: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    last_activity: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    last_activity: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
 
-    conversations: Mapped[list["Conversation"]] = relationship(back_populates="session", cascade="all, delete-orphan")
+    conversations: Mapped[list["Conversation"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
 
 
 class Conversation(Base):
@@ -48,13 +54,16 @@ class Conversation(Base):
     - timestamp: For analytics and sorting
     - session_id: To group related conversations
     """
+
     __tablename__ = "conversations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("session.id"), nullable=False, index=True)
     user_message: Mapped[str] = mapped_column(Text, nullable=False)
     bot_response: Mapped[str] = mapped_column(Text, nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False, index=True
+    )
 
     # Metadata for analytics
     tool_calls: Mapped[str | None] = mapped_column(JSON, nullable=True)
@@ -65,9 +74,7 @@ class Conversation(Base):
     session: Mapped["Session"] = relationship(back_populates="conversations")
 
     # Index for faster queries
-    __table_args__ = (
-        Index("ix_conversations_timestamp_desc", timestamp.desc()),
-    )
+    __table_args__ = (Index("ix_conversations_timestamp_desc", timestamp.desc()),)
 
 
 class CachedAnswer(Base):
@@ -84,6 +91,7 @@ class CachedAnswer(Base):
     - Prevents "ok" after different conversations from returning wrong cached answers
     - Same question in different contexts produces different cache entries
     """
+
     __tablename__ = "cached_answers"
 
     id: Mapped[int] = mapped_column(primary_key=True)

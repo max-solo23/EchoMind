@@ -13,7 +13,6 @@ Design:
 - Supports context-aware caching to prevent cross-conversation contamination
 """
 
-
 from repositories.conversation_repo import SQLAlchemyConversationRepository
 
 from .cache_service import CacheService
@@ -32,7 +31,7 @@ class ConversationLogger:
         self,
         conversation_repo: SQLAlchemyConversationRepository,
         cache_service: CacheService,
-        enable_caching: bool = True
+        enable_caching: bool = True,
     ):
         """
         Initialize with dependencies.
@@ -46,11 +45,7 @@ class ConversationLogger:
         self.cache_service = cache_service
         self.enable_caching = enable_caching
 
-    async def get_or_create_session(
-        self,
-        session_id: str,
-        user_ip: str | None = None
-    ) -> int:
+    async def get_or_create_session(self, session_id: str, user_ip: str | None = None) -> int:
         """
         Get existing session or create new one.
 
@@ -67,7 +62,7 @@ class ConversationLogger:
         self,
         question: str,
         last_assistant_message: str | None = None,
-        is_continuation: bool = False
+        is_continuation: bool = False,
     ) -> str | None:
         """
         Check if we have a cached answer for this question with context.
@@ -93,7 +88,7 @@ class ConversationLogger:
         return await self.cache_service.get_cached_answer(
             message=question,
             last_assistant_message=last_assistant_message,
-            is_continuation=is_continuation
+            is_continuation=is_continuation,
         )
 
     async def log_and_cache(
@@ -106,7 +101,7 @@ class ConversationLogger:
         evaluator_passed: bool | None = None,
         cache_response: bool = True,
         last_assistant_message: str | None = None,
-        is_continuation: bool = False
+        is_continuation: bool = False,
     ) -> int:
         """
         Log conversation and optionally cache the response with context.
@@ -139,7 +134,7 @@ class ConversationLogger:
             bot_response=bot_response,
             tool_calls=tool_calls,
             evaluator_used=evaluator_used,
-            evaluator_passed=evaluator_passed
+            evaluator_passed=evaluator_passed,
         )
 
         # Cache the response if enabled and requested
@@ -149,7 +144,7 @@ class ConversationLogger:
                 message=user_message,
                 answer=bot_response,
                 last_assistant_message=last_assistant_message,
-                is_continuation=is_continuation
+                is_continuation=is_continuation,
             )
 
         return conversation_id
@@ -198,21 +193,13 @@ class ConversationLogger:
     # Admin methods for frontend
 
     async def list_sessions(
-        self,
-        page: int = 1,
-        limit: int = 20,
-        sort_by: str = "created_at",
-        order: str = "desc"
+        self, page: int = 1, limit: int = 20, sort_by: str = "created_at", order: str = "desc"
     ) -> dict:
         """List all sessions with pagination."""
         return await self.conversation_repo.list_sessions(page, limit, sort_by, order)
 
     async def list_cache_entries(
-        self,
-        page: int = 1,
-        limit: int = 20,
-        sort_by: str = "last_used",
-        order: str = "desc"
+        self, page: int = 1, limit: int = 20, sort_by: str = "last_used", order: str = "desc"
     ) -> dict:
         """List cache entries with pagination."""
         return await self.cache_service.list_cache_entries(page, limit, sort_by, order)

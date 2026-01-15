@@ -9,3 +9,15 @@ __pycache__/
 memory-tool.db
 CLAUDE.md
 guides
+.mypy_cache
+.playwright-mcp
+.pytest_cache
+.vscode
+.ruff_cache
+*.md
+!README.md
+!CHANGELOG.md
+.coverage
+.vscode
+htmlcov
+tmpclaude*

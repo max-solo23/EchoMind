@@ -33,9 +33,9 @@ def rate_limit_exceeded_handler(request: Request, exc) -> JSONResponse:
             "detail": "You've sent too many messages. Please wait before trying again.",
             "retry_after": str(retry_seconds),  # For backwards compatibility
             "retry_after_seconds": retry_seconds,
-            "retry_after_human": "1 hour"
+            "retry_after_human": "1 hour",
         },
-        headers={"Retry-After": str(retry_seconds)}
+        headers={"Retry-After": str(retry_seconds)},
     )
 
 
@@ -43,5 +43,5 @@ def rate_limit_exceeded_handler(request: Request, exc) -> JSONResponse:
 # get_remote_address automatically handles X-Forwarded-For headers
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=[]  # No default limits, apply per-route
+    default_limits=[],  # No default limits, apply per-route
 )
