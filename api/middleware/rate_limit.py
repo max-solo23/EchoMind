@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from api.middleware.postgres_storage import PostgresStorage
+
 
 def rate_limit_exceeded_handler(request: Request, exc) -> JSONResponse:
     """
@@ -25,13 +27,13 @@ def rate_limit_exceeded_handler(request: Request, exc) -> JSONResponse:
     Returns:
         JSONResponse with 429 status code and rate limit details
     """
-    retry_seconds = 3600  # 1 hour
+    retry_seconds = 3600
     return JSONResponse(
         status_code=429,
         content={
             "error": "Rate limit exceeded",
             "detail": "You've sent too many messages. Please wait before trying again.",
-            "retry_after": str(retry_seconds),  # For backwards compatibility
+            "retry_after": str(retry_seconds),
             "retry_after_seconds": retry_seconds,
             "retry_after_human": "1 hour",
         },
@@ -39,9 +41,9 @@ def rate_limit_exceeded_handler(request: Request, exc) -> JSONResponse:
     )
 
 
-# Initialize the rate limiter with IP-based tracking
-# get_remote_address automatically handles X-Forwarded-For headers
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=[],  # No default limits, apply per-route
+    default_limits=[],
 )
+
+limiter._storage = PostgresStorage()

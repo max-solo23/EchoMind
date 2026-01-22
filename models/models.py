@@ -132,3 +132,15 @@ class CachedAnswer(Base):
         Index("ix_cached_answers_expires_at", expires_at),
         Index("ix_cached_answers_cache_type", cache_type),
     )
+
+
+class RateLimit(Base):
+    """
+    Rate limit table
+    """
+
+    __tablename__ = "rate_limit"
+
+    key: Mapped[str] = mapped_column(String(500), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    expiry: Mapped[int] = mapped_column(Integer, nullable=False)
