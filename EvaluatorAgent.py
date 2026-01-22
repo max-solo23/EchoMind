@@ -52,7 +52,7 @@ class EvaluatorAgent:
                 if isinstance(parsed, Evaluation):
                     return parsed
                 if hasattr(parsed, "choices"):
-                    return cast(Evaluation, parsed.choices[0].message.parsed)
+                    return cast("Evaluation", parsed.choices[0].message.parsed)
             except (NotImplementedError, AttributeError):
                 # Provider doesn't support parse, fall through to JSON extraction
                 pass

@@ -53,4 +53,4 @@ pushover_client = build_pushover_client(config.pushover_token, config.pushover_u
 tools = Tools(pushover_client)
 chat = Chat(me, llm_provider, config.llm_model, tools, evaluator)
 
-gr.ChatInterface(chat.chat, type="messages").launch()
+gr.ChatInterface(chat.chat, type="messages").launch()  # type: ignore[call-arg]

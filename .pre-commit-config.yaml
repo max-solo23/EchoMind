@@ -28,7 +28,7 @@ repos:
         name: Check for case conflicts in filenames
 
   # ==========================================================================
-  # RUFF - Fast linter and formatter (replaces black, isort, flake8)
+  # RUFF - Fast linter and formatter
   # ==========================================================================
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.1
@@ -62,6 +62,9 @@ repos:
           - uvicorn
           - python-dotenv
           - alembic
+          - limits
+          - slowapi
+          - gradio
         pass_filenames: false
         entry: mypy .
 

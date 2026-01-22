@@ -221,7 +221,7 @@ class SQLAlchemyCacheRepository:
             Number of entries deleted
         """
         result = cast(
-            CursorResult[tuple[()]],
+            "CursorResult[tuple[()]]",
             await self.session.execute(
                 delete(CachedAnswer).where(CachedAnswer.expires_at < datetime.utcnow())
             ),
@@ -232,7 +232,7 @@ class SQLAlchemyCacheRepository:
     async def clear_all_cache(self) -> int:
         """Delete all cached answers."""
         result = cast(
-            CursorResult[tuple[()]],
+            "CursorResult[tuple[()]]",
             await self.session.execute(delete(CachedAnswer)),
         )
         await self.session.commit()
@@ -330,7 +330,7 @@ class SQLAlchemyCacheRepository:
     async def delete_cache_by_id(self, cache_id: int) -> bool:
         """Delete single cache entry by ID."""
         result = cast(
-            CursorResult[tuple[()]],
+            "CursorResult[tuple[()]]",
             await self.session.execute(delete(CachedAnswer).where(CachedAnswer.id == cache_id)),
         )
         await self.session.commit()

@@ -71,5 +71,4 @@ class RateLimitState:
                 self._rate_per_hour = rate_per_hour
 
 
-# Global singleton instance
 rate_limit_state = RateLimitState()
