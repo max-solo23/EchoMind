@@ -14,8 +14,7 @@ from api.dependencies import (
     is_database_configured,
 )
 from api.middleware.auth import verify_api_key
-from api.middleware.rate_limit import limiter
-from api.middleware.rate_limit_state import rate_limit_state
+from api.middleware.rate_limit import check_rate_limit
 from Chat import Chat, InvalidMessageError
 from models.requests import ChatRequest
 from models.responses import ChatResponse
@@ -50,19 +49,7 @@ def extract_last_assistant_message(history: list[dict]) -> str | None:
     return None
 
 
-def get_rate_limit() -> str:
-    """
-    Returns the rate limit string based on configuration.
-
-    If rate limiting is disabled, returns a very high limit effectively disabling it.
-    """
-    if rate_limit_state.enabled:
-        return f"{rate_limit_state.rate_per_hour}/hour"
-    return "1000000/hour"  # Effectively unlimited when disabled
-
-
-@router.post("/chat", dependencies=[Depends(verify_api_key)])
-@limiter.limit(get_rate_limit)
+@router.post("/chat", dependencies=[Depends(verify_api_key), Depends(check_rate_limit)])
 async def chat_endpoint(
     request: Request,
     chat_request: ChatRequest,

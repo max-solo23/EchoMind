@@ -2,11 +2,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from slowapi.errors import RateLimitExceeded
 
 from api.dependencies import get_config
 from api.middleware.cors import setup_cors
-from api.middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from api.middleware.rate_limit_state import rate_limit_state
 from api.routes import admin, chat, health
 from database import close_database
@@ -14,14 +12,11 @@ from database import close_database
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler for startup/shutdown."""
-    # Startup
     config = get_config()
     rate_limit_state.update_settings(
         enabled=config.rate_limit_enabled, rate_per_hour=config.rate_limit_per_hour
     )
     yield
-    # Shutdown
     await close_database()
 
 
@@ -32,10 +27,6 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
-
-# Configure rate limiting
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 setup_cors(app)
 

@@ -7,6 +7,9 @@ primary_region = 'fra'
 [build]
   dockerfile = "Dockerfile"
 
+[deploy]
+  release_command = "alembic upgrade head"
+
 [env]
   PORT = '8080'
 

@@ -214,9 +214,7 @@ incremental = true
 # Per-module configuration for third-party packages without type stubs
 [[tool.mypy.overrides]]
 module = [
-    "gradio.*",
     "pushover.*",
-    "slowapi.*",
     "sklearn.*",
 ]
 ignore_missing_imports = true

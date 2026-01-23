@@ -1,49 +1,53 @@
-"""
-Rate limiting middleware using SlowAPI.
+import logging
+import time
 
-Provides IP-based rate limiting for API endpoints to prevent abuse.
-Configured to allow 15 requests per hour per IP address by default.
-"""
+from fastapi import HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 
-from fastapi import Request
-from fastapi.responses import JSONResponse
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from api.dependencies import get_config
+from api.middleware.rate_limit_state import rate_limit_state
+from database import get_session
+from models.models import RateLimit
 
-from api.middleware.postgres_storage import PostgresStorage
+logger = logging.getLogger(__name__)
 
-
-def rate_limit_exceeded_handler(request: Request, exc) -> JSONResponse:
-    """
-    Custom handler for 429 Too Many Requests responses.
-
-    Returns a JSON response with error details and Retry-After header
-    indicating when the client can retry the request.
-
-    Args:
-        request: The FastAPI request object
-        exc: The RateLimitExceeded exception
-
-    Returns:
-        JSONResponse with 429 status code and rate limit details
-    """
-    retry_seconds = 3600
-    return JSONResponse(
-        status_code=429,
-        content={
-            "error": "Rate limit exceeded",
-            "detail": "You've sent too many messages. Please wait before trying again.",
-            "retry_after": str(retry_seconds),
-            "retry_after_seconds": retry_seconds,
-            "retry_after_human": "1 hour",
-        },
-        headers={"Retry-After": str(retry_seconds)},
-    )
+EXPIRY_SECONDS = 3600
 
 
-limiter = Limiter(
-    key_func=get_remote_address,
-    default_limits=[],
-)
+async def check_rate_limit(request: Request) -> None:
+    if not rate_limit_state.enabled:
+        return
 
-limiter._storage = PostgresStorage()
+    ip = request.client.host if request.client else "unknown"
+    key = f"rate_limit:{ip}"
+
+    try:
+        count = await _increment_counter(key)
+        if count > rate_limit_state.rate_per_hour:
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit exceeded. Try again later.",
+                headers={"Retry-After": str(EXPIRY_SECONDS)},
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Rate limit check failed, allowing request: {e}")
+
+
+async def _increment_counter(key: str) -> int:
+    config = get_config()
+    expiry_timestamp = int(time.time()) + EXPIRY_SECONDS
+
+    async with get_session(config) as session:
+        stmt = insert(RateLimit).values(key=key, count=1, expiry=expiry_timestamp)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["key"],
+            set_={"count": RateLimit.count + 1, "expiry": expiry_timestamp},
+        )
+        await session.execute(stmt)
+        await session.commit()
+
+        result = await session.execute(select(RateLimit.count).where(RateLimit.key == key))
+        return result.scalar_one()

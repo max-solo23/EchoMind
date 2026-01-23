@@ -62,9 +62,6 @@ repos:
           - uvicorn
           - python-dotenv
           - alembic
-          - limits
-          - slowapi
-          - gradio
         pass_filenames: false
         entry: mypy .
 
