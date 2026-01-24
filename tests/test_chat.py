@@ -24,9 +24,9 @@ class TestMessageValidation:
         assert Chat._is_valid_message("Tell me about yourself") is True
 
     def test_too_short_message(self):
-        """Test that messages under 3 characters are rejected."""
-        assert Chat._is_valid_message("hi") is False
-        assert Chat._is_valid_message("ok") is False
+        """Test that messages under 2 characters are rejected."""
+        assert Chat._is_valid_message("h") is False
+        assert Chat._is_valid_message("i") is False
         assert Chat._is_valid_message("") is False
 
     def test_gibberish_message(self):
@@ -89,9 +89,9 @@ class TestChatBasics:
         me = Me(name="Test User", persona_yaml_file=temp_persona_file)
         chat = Chat(person=me, llm=mock_llm_provider, llm_model="test-model", llm_tools=mock_tools)
 
-        # Too short message should raise exception
+        # 1-char message should raise exception
         with pytest.raises(InvalidMessageError) as exc_info:
-            chat.chat("hi", [])
+            chat.chat("h", [])
 
         assert "invalid" in str(exc_info.value).lower()
 

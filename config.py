@@ -36,11 +36,9 @@ class Config:
                 "Set LLM_API_KEY (or OPENAI_API_KEY for the OpenAI provider)."
             )
 
-        # Parse allowed origins
         origins_str = os.getenv("ALLOWED_ORIGINS", "")
         allowed_origins = [o.strip() for o in origins_str.split(",") if o.strip()]
 
-        # Parse rate limiting configuration
         rate_limit_enabled = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
         rate_limit_per_hour = int(os.getenv("RATE_LIMIT_PER_HOUR", "10"))
 

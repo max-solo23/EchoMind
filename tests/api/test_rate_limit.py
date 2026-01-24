@@ -1,6 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
@@ -108,7 +108,7 @@ class TestRateLimiting:
             assert "retry-after" in response.headers
 
     def test_health_endpoint_not_rate_limited(self, client):
-        for i in range(20):
+        for _ in range(20):
             response = client.get("/health")
             assert response.status_code == 200
 

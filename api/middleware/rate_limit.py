@@ -10,6 +10,7 @@ from api.middleware.rate_limit_state import rate_limit_state
 from database import get_session
 from models.models import RateLimit
 
+
 logger = logging.getLogger(__name__)
 
 EXPIRY_SECONDS = 3600

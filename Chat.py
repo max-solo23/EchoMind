@@ -23,36 +23,31 @@ try:
 except ImportError:
 
     class APIError(Exception):  # type: ignore[no-redef]
-        """Base exception for API-related errors."""
-
         pass
 
     class APITimeoutError(APIError):  # type: ignore[no-redef]
-        """Exception raised when API request times out."""
-
         pass
 
     class RateLimitError(APIError):  # type: ignore[no-redef]
-        """Exception raised when rate limit is exceeded."""
-
         pass
 
     class APIConnectionError(APIError):  # type: ignore[no-redef]
-        """Exception raised when there's a connection error to the API."""
-
         pass
 
 
 logger = logging.getLogger(__name__)
 
 
-class InvalidMessageError(Exception):
-    """Raised when a message fails validation."""
+MIN_MESSAGE_LENGTH = 2
+MIN_LETTER_RATIO = 0.3
+MESSAGE_PREVIEW_LENGTH = 50
+SSE_KICKSTART_BUFFER_SIZE = 2048
 
+
+class InvalidMessageError(Exception):
     pass
 
 
-# Error code mappings for consistent error handling
 ERROR_HANDLERS: dict[type, tuple[str, str]] = {
     RateLimitError: (
         "I'm experiencing high demand right now. Please try again in a moment.",
@@ -79,13 +74,10 @@ DEFAULT_ERROR_MESSAGE = (
 
 @dataclass(frozen=True)
 class SSEEvent:
-    """Represents a Server-Sent Event."""
-
     delta: str | None = None
     metadata: dict | None = None
 
     def encode(self) -> bytes:
-        """Encode the event as SSE-formatted bytes."""
         payload = {"delta": self.delta, "metadata": self.metadata}
         return f"data: {json.dumps(payload)}\n\n".encode()
 
@@ -95,7 +87,6 @@ def _build_messages(
     history: list[dict],
     user_message: str,
 ) -> list[dict]:
-    """Build the message list for LLM completion."""
     return (
         [{"role": "system", "content": system_prompt}]
         + history
@@ -104,12 +95,6 @@ def _build_messages(
 
 
 def _handle_llm_error(error: Exception, context: str = "") -> tuple[str, str]:
-    """
-    Get appropriate error message and code for an LLM error.
-
-    Returns:
-        Tuple of (user_message, error_code)
-    """
     context_suffix = f" ({context})" if context else ""
 
     for error_type, (message, code) in ERROR_HANDLERS.items():
@@ -122,7 +107,6 @@ def _handle_llm_error(error: Exception, context: str = "") -> tuple[str, str]:
 
 
 def _create_tool_call_object(tool_call_dict: dict) -> SimpleNamespace:
-    """Convert a tool call dictionary to the object format expected by handle_tool_call."""
     return SimpleNamespace(
         id=tool_call_dict["id"],
         type=tool_call_dict["type"],
@@ -151,47 +135,29 @@ class Chat:
 
     @staticmethod
     def _is_valid_message(message: str) -> bool:
-        """
-        Validate message to filter gibberish and nonsense input.
-
-        Returns False if:
-        - Message is too short (< 3 characters)
-        - Message has < 30% alphabetic characters (keyboard mashing)
-        - Message is only special characters/numbers
-
-        Args:
-            message: User message to validate
-
-        Returns:
-            True if message appears valid, False otherwise
-        """
         cleaned = message.strip()
 
-        if len(cleaned) < 3:
+        if len(cleaned) < MIN_MESSAGE_LENGTH:
             return False
 
         no_spaces = cleaned.replace(" ", "")
         if not no_spaces:
             return False
 
-        # Count alphabetic characters (supports multiple languages)
-        # Pattern includes Latin, Cyrillic, and common accented characters
         letter_pattern = (
             r"[a-zA-ZàèéìòùáéíóúäëïöüāēīōūаеёиоуыэюяґєіїÀÈÉÌÒÙÁÉÍÓÚÄËÏÖÜĀĒĪŌŪАЕЁИОУЫЭЮЯҐЄІЇ]"
         )
         letters = len(re.findall(letter_pattern, no_spaces))
         total = len(no_spaces)
 
-        return total <= 0 or (letters / total) >= 0.3
+        return total <= 0 or (letters / total) >= MIN_LETTER_RATIO
 
     def _get_tools(self) -> list[dict] | None:
-        """Get tools list if provider supports them."""
         return self.llm_tools.tools if self.supports_tools else None
 
     def _validate_message(self, message: str) -> None:
-        """Validate message and raise InvalidMessageError if invalid."""
         if not self._is_valid_message(message):
-            logger.warning(f"Invalid message rejected: {message[:50]}...")
+            logger.warning(f"Invalid message rejected: {message[:MESSAGE_PREVIEW_LENGTH]}...")
             raise InvalidMessageError(
                 "Your message appears to be incomplete or invalid. "
                 "Please send a clear question or message."
@@ -203,7 +169,6 @@ class Chat:
         messages: list[dict],
         assistant_content: str | None,
     ) -> None:
-        """Process tool calls and append results to messages."""
         results = self.llm_tools.handle_tool_call(tool_calls)
         messages.append(
             {"role": "assistant", "content": assistant_content, "tool_calls": tool_calls}
@@ -216,7 +181,6 @@ class Chat:
         message: str,
         history: list[dict],
     ) -> str:
-        """Evaluate reply and rerun if needed. Returns final reply."""
         if not self.evaluator_llm:
             return reply
 
@@ -231,19 +195,6 @@ class Chat:
         return self.rerun(reply, message, history, evaluation.feedback, self.person.system_prompt)
 
     def chat(self, message: str, history: list[dict]) -> str:
-        """
-        Process a chat message with validation and error handling.
-
-        Args:
-            message: User message
-            history: Conversation history
-
-        Returns:
-            Bot response string
-
-        Raises:
-            InvalidMessageError: If message fails validation
-        """
         self._validate_message(message)
 
         messages = _build_messages(self.person.system_prompt, history, message)
@@ -256,7 +207,6 @@ class Chat:
             return user_message
 
     def _run_completion_loop(self, messages: list[dict]) -> str:
-        """Run the completion loop, handling tool calls until done."""
         tools = self._get_tools()
 
         while True:
@@ -279,7 +229,6 @@ class Chat:
         feedback: str,
         system_prompt: str,
     ) -> str:
-        """Rerun completion with feedback from failed evaluation."""
         updated_system_prompt = (
             f"{system_prompt}\n\n"
             "## Previous answer rejected\n"
@@ -292,17 +241,10 @@ class Chat:
         return response.message.content or ""
 
     async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[bytes, None]:
-        """
-        Stream chat responses as SSE events.
-
-        Yields SSE-formatted events: data: {"delta": ..., "metadata": ...}\\n\\n
-        Skips evaluator for streaming mode.
-        """
         messages = _build_messages(self.person.system_prompt, history, message)
 
         try:
-            # Kick-start streaming for proxies/browsers that buffer small chunks.
-            yield (":" + (" " * 2048) + "\n\n").encode("utf-8")
+            yield (":" + (" " * SSE_KICKSTART_BUFFER_SIZE) + "\n\n").encode("utf-8")
 
             async for event in self._run_stream_loop(messages):
                 yield event
@@ -314,7 +256,6 @@ class Chat:
             yield SSEEvent(metadata={"error": str(error), "code": error_code}).encode()
 
     async def _run_stream_loop(self, messages: list[dict]) -> AsyncGenerator[bytes, None]:
-        """Run the streaming loop, handling tool calls until done."""
         tools = self._get_tools()
 
         while True:
@@ -338,7 +279,6 @@ class Chat:
 
             async for event in self._execute_stream_tool_calls(tool_calls_accumulator, messages):
                 yield event
-                # Check if we got an error event (tool execution failed)
                 if b'"status": "failed"' in event:
                     return
 
@@ -347,7 +287,6 @@ class Chat:
         tool_calls,
         accumulator: list[dict],
     ) -> None:
-        """Accumulate streaming tool call deltas into complete tool calls."""
         for tool_call in tool_calls:
             while len(accumulator) <= tool_call.index:
                 accumulator.append(
@@ -370,7 +309,6 @@ class Chat:
         tool_calls: list[dict],
         messages: list[dict],
     ) -> AsyncGenerator[bytes, None]:
-        """Execute tool calls during streaming and yield status events."""
         for tc in tool_calls:
             tool_name = tc["function"]["name"]
 
