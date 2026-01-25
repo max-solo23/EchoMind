@@ -117,12 +117,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial release
-- Gradio chat interface
 - FastAPI REST API with streaming support
 - Rate limiting (10 requests/hour)
 - API key authentication
 - LLM provider abstraction (OpenAI, Gemini)
 - Persona system via YAML configuration
-- Optional evaluator agent for response quality
 - Tool calling support (record_user_details, record_unknown_question)
 - PushOver notifications

@@ -7,7 +7,6 @@ from Chat import Chat
 from config import Config
 from core.llm import create_llm_provider
 from database import get_session
-from EvaluatorAgent import EvaluatorAgent
 from Me import Me
 from PushOver import PushOver
 from repositories.cache_repo import SQLAlchemyCacheRepository
@@ -29,16 +28,9 @@ def get_config() -> Config:
 
 @lru_cache
 def get_chat_service() -> Chat:
-    """
-    Get singleton Chat service with all dependencies wired up.
-
-    Uses lru_cache to ensure service is created once and reused.
-    Follows same dependency injection pattern as app.py.
-    """
     config = get_config()
     llm_provider = create_llm_provider(config)
 
-    # Warn about provider limitations
     if not llm_provider.capabilities.get("tools", False):
         print(
             f"Warning: {config.llm_provider} does not support tool calling. "
@@ -46,18 +38,7 @@ def get_chat_service() -> Chat:
             flush=True,
         )
 
-    if config.use_evaluator and not llm_provider.capabilities.get("structured_output", False):
-        print(
-            f"Warning: {config.llm_provider} does not support structured outputs. "
-            "Evaluator will use JSON fallback mode.",
-            flush=True,
-        )
-
     me = Me(config.persona_name, config.persona_file)
-    evaluator: EvaluatorAgent | None = None
-
-    if config.use_evaluator:
-        evaluator = EvaluatorAgent(me, llm_provider, config.llm_model)
     pushover: PushOver | None = None
 
     if config.pushover_token and config.pushover_user:
@@ -65,7 +46,7 @@ def get_chat_service() -> Chat:
 
     tools = Tools(pushover)
 
-    return Chat(me, llm_provider, config.llm_model, tools, evaluator)
+    return Chat(me, llm_provider, config.llm_model, tools)
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:

@@ -141,7 +141,7 @@ async def _chat_with_logging(
             session_db_id=session_db_id,
             user_message=message,
             bot_response=reply,
-            evaluator_used=chat_service.evaluator_llm is not None,
+            evaluator_used=False,
             cache_response=True,
             last_assistant_message=last_assistant_msg,
             is_continuation=is_continuation,

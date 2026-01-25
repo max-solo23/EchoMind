@@ -11,7 +11,6 @@ Personal AI chatbot that embodies a configurable persona for portfolio websites 
 - **Message Validation** - Filters gibberish and invalid input with user-friendly error messages
 - **Context-Aware Caching** - Intelligent response caching with TTL to reduce API costs
 - **Conversation Logging** - PostgreSQL-backed session and conversation tracking
-- **Quality Evaluation** - Optional response quality control via evaluator agent
 - **Graceful Error Handling** - User-friendly messages for LLM errors (rate limits, timeouts, etc.)
 - **Tool Calling** - Capture user contact info, log unknown questions
 - **Push Notifications** - Alerts via Pushover when users engage
@@ -195,12 +194,9 @@ alembic upgrade head
 
 ```
 EchoMind/
-├── app.py                 # Gradio interface entry point
 ├── Chat.py                # Main chat orchestration
 ├── Me.py                  # Persona loader
 ├── Tools.py               # LLM function calling
-├── EvaluatorAgent.py      # Response quality control
-├── Evaluation.py          # Evaluation models
 ├── PushOver.py            # Push notification service
 ├── config.py              # Configuration management
 ├── database.py            # Database connection setup

@@ -14,7 +14,6 @@ class Config:
     pushover_user: str | None
     persona_name: str
     persona_file: str
-    use_evaluator: bool = False
     api_key: str = ""
     allowed_origins: list[str] = field(default_factory=list)
     rate_limit_enabled: bool = True
@@ -56,7 +55,6 @@ class Config:
             pushover_user=os.getenv("PUSHOVER_USER"),
             persona_name="Max",
             persona_file="persona.yaml",
-            use_evaluator=os.getenv("USE_EVALUATOR", "false").lower() == "true",
             api_key=os.getenv("API_KEY", ""),
             allowed_origins=allowed_origins,
             rate_limit_enabled=rate_limit_enabled,

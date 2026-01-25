@@ -5,13 +5,10 @@ import pytest
 
 from config import Config
 from core.llm.types import CompletionMessage, CompletionResponse
-from EvaluatorAgent import Evaluation
 
 
 @pytest.fixture
 def mock_env_vars():
-    """Provide fake environment variables for testing."""
-
     return {
         "LLM_PROVIDER": "openai",
         "LLM_API_KEY": "test-key-123",
@@ -31,14 +28,7 @@ def config(mock_env_vars, monkeypatch):
 
 @pytest.fixture
 def mock_llm_provider():
-    """Fake LLM provider that returns responses."""
-
     class MockLLM:
-        # Add the three things I need:
-        # 1. complete()
-        # 2. parse() method
-        # 3. capabilities property
-
         def complete(self, *, model: str, messages: list[dict], tools: list[dict] | None = None):
             return CompletionResponse(
                 finish_reason="stop",
@@ -47,24 +37,9 @@ def mock_llm_provider():
                 ),
             )
 
-        def parse(self, *, model: str, messages: list[dict], response_format):
-            # Create a fake Evaluation oject
-            fake_evaluation = Evaluation(is_acceptable=True, feedback="Looks good!")
-
-            class Message:
-                parsed = fake_evaluation
-
-            class Choice:
-                message = Message()
-
-            class ParsedResponse:
-                choices = [Choice()]
-
-            return ParsedResponse()
-
         @property
         def capabilities(self):
-            return {"tools": True, "streaming": True, "structured_output": True}
+            return {"tools": True, "streaming": True}
 
     return MockLLM()
 

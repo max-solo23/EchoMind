@@ -22,7 +22,6 @@ def client(monkeypatch):
         llm_api_key="test-key-123",
         llm_model="gpt-4",
         llm_base_url=None,
-        use_evaluator=False,
         persona_name="Test",
         persona_file="persona.yaml",
         pushover_token=None,

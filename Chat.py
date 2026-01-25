@@ -4,13 +4,8 @@ import re
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
 
 from core.llm.provider import LLMProvider
-
-
-if TYPE_CHECKING:
-    from EvaluatorAgent import EvaluatorAgent
 
 
 try:
@@ -124,13 +119,11 @@ class Chat:
         llm: LLMProvider,
         llm_model: str,
         llm_tools,
-        evaluator_llm: "EvaluatorAgent | None" = None,
     ):
         self.llm = llm
         self.llm_model = llm_model
         self.llm_tools = llm_tools
         self.person = person
-        self.evaluator_llm = evaluator_llm
         self.supports_tools = llm.capabilities.get("tools", False)
 
     @staticmethod
@@ -175,33 +168,13 @@ class Chat:
         )
         messages.extend(results)
 
-    def _evaluate_and_rerun(
-        self,
-        reply: str,
-        message: str,
-        history: list[dict],
-    ) -> str:
-        if not self.evaluator_llm:
-            return reply
-
-        evaluation = self.evaluator_llm.evaluate(reply, message, history)
-
-        if evaluation.is_acceptable:
-            logger.debug("Passed evaluation - returning reply")
-            return reply
-
-        logger.debug("Failed evaluation - rerunning")
-        logger.debug(f"Feedback: {evaluation.feedback}")
-        return self.rerun(reply, message, history, evaluation.feedback, self.person.system_prompt)
-
     def chat(self, message: str, history: list[dict]) -> str:
         self._validate_message(message)
 
         messages = _build_messages(self.person.system_prompt, history, message)
 
         try:
-            reply = self._run_completion_loop(messages)
-            return self._evaluate_and_rerun(reply, message, history)
+            return self._run_completion_loop(messages)
         except Exception as error:
             user_message, _ = _handle_llm_error(error)
             return user_message
@@ -220,25 +193,6 @@ class Chat:
                 messages,
                 response.message.content,
             )
-
-    def rerun(
-        self,
-        reply: str,
-        message: str,
-        history: list[dict],
-        feedback: str,
-        system_prompt: str,
-    ) -> str:
-        updated_system_prompt = (
-            f"{system_prompt}\n\n"
-            "## Previous answer rejected\n"
-            "You just tried to reply, but the quality control rejected your reply\n"
-            f"## Your attempted answer:\n{reply}\n\n"
-            f"## Reason for rejection:\n{feedback}\n\n"
-        )
-        messages = _build_messages(updated_system_prompt, history, message)
-        response = self.llm.complete(model=self.llm_model, messages=messages)
-        return response.message.content or ""
 
     async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[bytes, None]:
         messages = _build_messages(self.person.system_prompt, history, message)
