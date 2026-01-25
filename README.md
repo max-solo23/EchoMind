@@ -35,8 +35,8 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your settings
 
-# Run
-python app.py
+# Run API server
+uvicorn api.main:app --port 8000
 ```
 
 ## Configuration
@@ -49,13 +49,10 @@ Create a `.env` file in the project root:
 # Required
 LLM_PROVIDER=openai          # openai, gemini, or openai-compatible
 LLM_API_KEY=your-api-key
-LLM_MODEL=gpt-4o-mini
+LLM_MODEL=gpt-5.2            # or gpt-5-mini, gpt-5-nano
 
 # Optional - OpenAI-compatible providers
 LLM_BASE_URL=https://api.deepseek.com/v1
-
-# Optional - Quality evaluation
-USE_EVALUATOR=false
 
 # Optional - Push notifications
 PUSHOVER_TOKEN=your-token
@@ -194,46 +191,46 @@ alembic upgrade head
 
 ```
 EchoMind/
-├── Chat.py                # Main chat orchestration
-├── Me.py                  # Persona loader
-├── Tools.py               # LLM function calling
-├── PushOver.py            # Push notification service
-├── config.py              # Configuration management
-├── database.py            # Database connection setup
-├── api/
-│   ├── main.py            # FastAPI application
-│   ├── dependencies.py    # Dependency injection
-│   ├── routes/
-│   │   ├── chat.py        # Chat endpoints
-│   │   ├── admin.py       # Admin endpoints
-│   │   └── health.py      # Health check endpoint
-│   └── middleware/
-│       ├── auth.py            # API key authentication
-│       ├── cors.py            # CORS configuration
-│       ├── rate_limit.py      # Rate limiting middleware
-│       └── rate_limit_state.py # Dynamic rate limit state manager
-├── services/
-│   ├── cache_service.py   # Context-aware caching
-│   ├── conversation_logger.py
-│   └── similarity_service.py
-├── repositories/
-│   ├── cache_repo.py      # Cache database operations
-│   └── conversation_repo.py
+├── config.py                  # Configuration management
 ├── core/
-│   ├── interfaces.py      # Protocol definitions
+│   ├── chat.py                # Main chat orchestration
+│   ├── persona.py             # Persona loader
+│   ├── interfaces.py          # Protocol definitions
 │   └── llm/
-│       ├── factory.py     # Provider factory
-│       ├── provider.py    # Base provider
-│       ├── types.py       # Type definitions
+│       ├── factory.py         # Provider factory
+│       ├── provider.py        # Base provider
+│       ├── types.py           # Type definitions
 │       └── providers/
 │           ├── openai_compatible.py
 │           └── gemini.py
+├── services/
+│   ├── push_over.py           # Push notification service
+│   ├── cache_service.py       # Context-aware caching
+│   ├── conversation_logger.py
+│   └── similarity_service.py
+├── repositories/
+│   ├── connection.py          # Database connection setup
+│   ├── cache_repo.py          # Cache database operations
+│   └── conversation_repo.py
+├── tools/
+│   └── llm_tools.py           # LLM function calling
 ├── models/
-│   ├── models.py          # SQLAlchemy models
-│   ├── requests.py        # Pydantic request models
-│   └── responses.py       # Pydantic response models
-├── alembic/               # Database migrations
-└── tests/                 # Test suite
+│   ├── models.py              # SQLAlchemy models
+│   ├── requests.py            # Pydantic request models
+│   └── responses.py           # Pydantic response models
+├── api/
+│   ├── main.py                # FastAPI application
+│   ├── dependencies.py        # Dependency injection
+│   ├── routes/
+│   │   ├── chat.py            # Chat endpoints
+│   │   ├── admin.py           # Admin endpoints
+│   │   └── health.py          # Health check endpoint
+│   └── middleware/
+│       ├── auth.py            # API key authentication
+│       ├── cors.py            # CORS configuration
+│       └── rate_limit.py      # Rate limiting
+├── alembic/                   # Database migrations
+└── tests/                     # Test suite (70%+ coverage)
 ```
 
 ## Development
@@ -242,8 +239,11 @@ EchoMind/
 # Run API server (development)
 uvicorn api.main:app --reload --port 8000
 
-# Run Gradio interface
-python app.py
+# Run tests
+pytest
+
+# Run tests with coverage
+pytest --cov=. --cov-report=html
 
 # Run migrations
 alembic upgrade head
