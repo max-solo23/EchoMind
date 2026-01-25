@@ -56,7 +56,6 @@ def reset_rate_limit():
 
 
 class TestRateLimiting:
-
     def test_chat_endpoint_enforces_rate_limit(self, client, mock_chat_service):
         counter = {"value": 0}
 
@@ -126,7 +125,9 @@ class TestRateLimiting:
         async def mock_increment_error(key: str) -> int:
             raise Exception("DB connection failed")
 
-        with patch("api.middleware.rate_limit._increment_counter", side_effect=mock_increment_error):
+        with patch(
+            "api.middleware.rate_limit._increment_counter", side_effect=mock_increment_error
+        ):
             response = client.post(
                 "/api/v1/chat",
                 json={"message": "test", "history": []},

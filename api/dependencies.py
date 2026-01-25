@@ -3,18 +3,18 @@ from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from Chat import Chat
 from config import Config
+from core.chat import Chat
 from core.llm import create_llm_provider
-from database import get_session
-from Me import Me
-from PushOver import PushOver
+from core.persona import Me
 from repositories.cache_repo import SQLAlchemyCacheRepository
+from repositories.connection import get_session
 from repositories.conversation_repo import SQLAlchemyConversationRepository
 from services.cache_service import CacheService
 from services.conversation_logger import ConversationLogger
+from services.push_over import PushOver
 from services.similarity_service import SimilarityService
-from Tools import Tools
+from tools.llm_tools import Tools
 
 
 @lru_cache

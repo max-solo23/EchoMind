@@ -15,10 +15,10 @@ from api.dependencies import (
 )
 from api.middleware.auth import verify_api_key
 from api.middleware.rate_limit import check_rate_limit
-from Chat import Chat, InvalidMessageError
-from database import get_session
+from core.chat import Chat, InvalidMessageError
 from models.requests import ChatRequest
 from models.responses import ChatResponse
+from repositories.connection import get_session
 
 
 logger = logging.getLogger(__name__)
@@ -185,9 +185,7 @@ async def _stream_with_logging(
                 is_continuation=is_continuation,
             )
 
-            yield (":" + (" " * SSE_KICKSTART_BUFFER_SIZE) + "\n\n").encode(
-                "utf-8"
-            )
+            yield (":" + (" " * SSE_KICKSTART_BUFFER_SIZE) + "\n\n").encode("utf-8")
 
             for i in range(0, len(cached_answer), STREAMING_CHUNK_SIZE):
                 text_chunk = cached_answer[i : i + STREAMING_CHUNK_SIZE]

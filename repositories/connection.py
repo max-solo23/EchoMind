@@ -25,7 +25,7 @@ def get_engine(config: Config):
             pool_size=config.db_pool_size,
             max_overflow=config.db_max_overflow,
             echo=config.db_echo,
-            pool_pre_ping=True,  # Verify connections before use
+            pool_pre_ping=True,
         )
 
     return _engine

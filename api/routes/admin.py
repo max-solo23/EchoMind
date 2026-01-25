@@ -222,7 +222,7 @@ async def admin_health():
     if is_database_configured():
         try:
             from api.dependencies import get_config
-            from database import get_session
+            from repositories.connection import get_session
 
             config = get_config()
             async with get_session(config) as session:

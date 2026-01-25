@@ -7,8 +7,8 @@ from sqlalchemy.dialects.postgresql import insert
 
 from api.dependencies import get_config
 from api.middleware.rate_limit_state import rate_limit_state
-from database import get_session
 from models.models import RateLimit
+from repositories.connection import get_session
 
 
 logger = logging.getLogger(__name__)

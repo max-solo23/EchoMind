@@ -2,7 +2,7 @@
 
 from unittest.mock import patch
 
-from PushOver import PushOver
+from services.push_over import PushOver
 
 
 class TestPushOver:
@@ -20,7 +20,7 @@ class TestPushOver:
         assert pushover.token == "test_token"
         assert pushover.user == "test_user"
 
-    @patch("PushOver.requests.post")
+    @patch("services.push_over.requests.post")
     def test_push_sends_to_api(self, mock_post):
         """
         Verify push sends correct data to Pushover API.

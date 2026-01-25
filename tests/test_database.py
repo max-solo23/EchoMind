@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import database
 from config import Config
+from repositories import connection as database
 
 
 @pytest.fixture(autouse=True)
@@ -39,7 +39,7 @@ def mock_config():
 class TestGetEngine:
     """Test engine creation and singleton pattern."""
 
-    @patch("database.create_async_engine")
+    @patch("repositories.connection.create_async_engine")
     def test_creates_engine_with_config(self, mock_create_engine, mock_config):
         """
         Verify engine is created with correct parameters.
@@ -61,7 +61,7 @@ class TestGetEngine:
             pool_pre_ping=True,
         )
 
-    @patch("database.create_async_engine")
+    @patch("repositories.connection.create_async_engine")
     def test_returns_same_engine_on_second_call(self, mock_create_engine, mock_config):
         """
         Verify singleton pattern - engine created once.
@@ -96,8 +96,8 @@ class TestGetEngine:
 class TestGetSessionFactory:
     """Test session factory creation."""
 
-    @patch("database.async_sessionmaker")
-    @patch("database.get_engine")
+    @patch("repositories.connection.async_sessionmaker")
+    @patch("repositories.connection.get_engine")
     def test_creates_factory_with_engine(self, mock_get_engine, mock_sessionmaker, mock_config):
         """
         Verify factory created with correct engine and settings.
@@ -115,8 +115,8 @@ class TestGetSessionFactory:
         assert result == mock_factory
         mock_sessionmaker.assert_called_once()
 
-    @patch("database.async_sessionmaker")
-    @patch("database.get_engine")
+    @patch("repositories.connection.async_sessionmaker")
+    @patch("repositories.connection.get_engine")
     def test_returns_same_factory_on_second_call(
         self, mock_get_engine, mock_sessionmaker, mock_config
     ):
@@ -141,7 +141,7 @@ class TestGetSession:
     """Test session context manager."""
 
     @pytest.mark.asyncio
-    @patch("database.get_session_factory")
+    @patch("repositories.connection.get_session_factory")
     async def test_yields_session_and_closes(self, mock_get_factory, mock_config):
         """
         Verify session is yielded and closed on exit.
@@ -159,7 +159,7 @@ class TestGetSession:
         mock_session.close.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("database.get_session_factory")
+    @patch("repositories.connection.get_session_factory")
     async def test_rollbacks_on_exception(self, mock_get_factory, mock_config):
         """
         Verify rollback called when exception raised in context.

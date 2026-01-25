@@ -7,7 +7,7 @@ from api.dependencies import get_config
 from api.middleware.cors import setup_cors
 from api.middleware.rate_limit_state import rate_limit_state
 from api.routes import admin, chat, health
-from database import close_database
+from repositories.connection import close_database
 
 
 @asynccontextmanager

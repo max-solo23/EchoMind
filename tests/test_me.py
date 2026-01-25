@@ -1,4 +1,4 @@
-from Me import Me
+from core.persona import Me
 
 
 def test_me_loads_persona(temp_persona_file):

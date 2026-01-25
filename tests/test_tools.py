@@ -11,7 +11,7 @@ Key concepts tested:
 import json
 from unittest.mock import MagicMock
 
-from Tools import Tools
+from tools.llm_tools import Tools
 
 
 def test_tools_initializes_with_schemas():

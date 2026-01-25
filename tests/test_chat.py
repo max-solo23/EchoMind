@@ -10,8 +10,8 @@ Key concepts tested:
 
 import pytest
 
-from Chat import Chat, InvalidMessageError, SSEEvent
-from Me import Me
+from core.chat import Chat, InvalidMessageError, SSEEvent
+from core.persona import Me
 
 
 class TestMessageValidation:
