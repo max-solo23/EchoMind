@@ -1,3 +1,6 @@
+import hashlib
+
+
 class Me:
     def __init__(self, name: str, persona_yaml_file: str):
         self.name = name
@@ -14,3 +17,6 @@ class Me:
         If the user is interested and engaging in discussion, try to steer them towards getting in touch via email; \
         ask for their email and record it using your record_user_details tool. \n\n## Your Profile:\n{self.summary}\n\n\
         Answer questions naturally and directly as {self.name}. Stay in character and be helpful."
+
+    def content_hash(self):
+        return hashlib.sha256(self.summary.encode()).hexdigest()[:16]
