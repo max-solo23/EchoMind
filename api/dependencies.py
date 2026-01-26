@@ -19,12 +19,12 @@ from tools.llm_tools import Tools
 
 @lru_cache
 def get_config() -> Config:
-    """
-    Get singleton Config instance.
-    Uses lru_cache to ensure config is loaded once and reused.
-    """
     return Config.from_env()
 
+@lru_cache
+def get_persona() -> Me:
+    config = get_config()
+    return Me(config.persona_name, config.persona_file)
 
 @lru_cache
 def get_chat_service() -> Chat:
@@ -38,7 +38,7 @@ def get_chat_service() -> Chat:
             flush=True,
         )
 
-    me = Me(config.persona_name, config.persona_file)
+    me = get_persona()
     pushover: PushOver | None = None
 
     if config.pushover_token and config.pushover_user:
@@ -50,17 +50,6 @@ def get_chat_service() -> Chat:
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    """
-    FastAPI dependency for database sessions.
-
-    Usage:
-        @router.get("/example")
-        async def example(session: AsyncSession = Depends(get_db_session)):
-            ...
-
-    Yields:
-        AsyncSession: Database session (auto-closed after request)
-    """
     config = get_config()
 
     if not config.database_url:
@@ -71,19 +60,11 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def get_conversation_logger(session: AsyncSession) -> ConversationLogger:
-    """
-    Create ConversationLogger with all dependencies.
-
-    Args:
-        session: Database session from get_db_session
-
-    Returns:
-        Configured ConversationLogger
-    """
     conversation_repo = SQLAlchemyConversationRepository(session)
     cache_repo = SQLAlchemyCacheRepository(session)
-    similarity_service = SimilarityService(threshold=0.90)
-    cache_service = CacheService(cache_repo, similarity_service)
+    similarity_service = SimilarityService(threshold=0.80)
+    persona_hash = get_persona().content_hash()
+    cache_service = CacheService(cache_repo, similarity_service, persona_hash)
 
     return ConversationLogger(
         conversation_repo=conversation_repo, cache_service=cache_service, enable_caching=True
@@ -91,6 +72,5 @@ async def get_conversation_logger(session: AsyncSession) -> ConversationLogger:
 
 
 def is_database_configured() -> bool:
-    """Check if database is configured."""
     config = get_config()
     return config.database_url is not None

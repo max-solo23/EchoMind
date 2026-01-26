@@ -9,36 +9,15 @@ from services.similarity_service import SimilarityService
 
 
 class TestSimilarityServiceInit:
-    """Test SimilarityService initialization."""
-
     def test_init_default_threshold(self):
-        """
-        Verify default threshold is 0.90 (90% similarity).
-
-        Why: 90% is strict enough to avoid false matches but lenient
-        enough to catch rephrased questions like "What do you do?"
-        vs "What's your job?". Default should be sensible out of box.
-        """
         service = SimilarityService()
-        assert service.threshold == 0.90
+        assert service.threshold == 0.80
 
     def test_init_custom_threshold(self):
-        """
-        Verify custom threshold is stored.
-
-        Why: Different use cases need different thresholds. FAQ matching
-        might use 0.80, while deduplication might need 0.95.
-        """
         service = SimilarityService(threshold=0.75)
         assert service.threshold == 0.75
 
     def test_init_vectorizer_not_fitted(self):
-        """
-        Verify vectorizer starts unfitted.
-
-        Why: The vectorizer needs training data before it can transform.
-        _is_fitted flag tracks this state to handle first-call differently.
-        """
         service = SimilarityService()
         assert service._is_fitted is False
 
