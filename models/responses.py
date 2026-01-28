@@ -2,33 +2,18 @@ from pydantic import BaseModel, Field
 
 
 class ChatResponse(BaseModel):
-    """Response model for chat endpoint."""
-
-    reply: str = Field(..., description="Chatbot's reply")
+    reply: str = Field(...)
 
 
 class ErrorResponse(BaseModel):
-    """Error response model."""
-
-    detail: str = Field(..., description="Error description")
+    detail: str = Field(...)
 
 
 class HealthResponse(BaseModel):
-    """Health check response model."""
-
-    status: str = Field(..., description="Service status")
-    version: str = Field(..., description="API version")
-
-
-# Streaming response models
+    status: str = Field(...)
+    version: str = Field(...)
 
 
 class StreamEvent(BaseModel):
-    """
-    SSE event model for streaming chat responses.
-
-    Format: {"delta": <string|null>, "metadata": <object|null>}
-    """
-
-    delta: str | None = Field(None, description="Text content to append")
-    metadata: dict | None = Field(None, description="Event metadata")
+    delta: str | None = Field(None)
+    metadata: dict | None = Field(None)

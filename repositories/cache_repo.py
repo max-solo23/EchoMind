@@ -1,5 +1,3 @@
-"""SQLAlchemy implementation of CacheRepository with context-aware caching."""
-
 import json
 from datetime import datetime
 from typing import cast
@@ -11,30 +9,10 @@ from models.models import CachedAnswer
 
 
 class SQLAlchemyCacheRepository:
-    """
-    Repository for cache operations with context-aware keys and TTL support.
-
-    Key changes from previous version:
-    - Uses cache_key (SHA256 hash) for lookups instead of raw question
-    - Supports TTL with expires_at field
-    - Tracks cache_type (knowledge vs conversational)
-    """
-
     def __init__(self, session: AsyncSession):
         self.session = session
 
     async def get_cache_by_key(self, cache_key: str) -> dict | None:
-        """
-        Get cache entry by context-aware key (SHA256 hash).
-
-        This is the primary lookup method for context-aware caching.
-
-        Args:
-            cache_key: SHA256 hash of (context || question)
-
-        Returns:
-            Cache entry dict or None
-        """
         result = await self.session.execute(
             select(CachedAnswer).where(CachedAnswer.cache_key == cache_key)
         )
@@ -59,18 +37,6 @@ class SQLAlchemyCacheRepository:
         }
 
     async def get_cache_by_question(self, question: str) -> dict | None:
-        """
-        Get exact match for question text.
-
-        Note: This is now secondary to get_cache_by_key for context-aware caching.
-        Kept for backwards compatibility and similarity matching.
-
-        Args:
-            question: Original question text
-
-        Returns:
-            Cache entry dict or None
-        """
         result = await self.session.execute(
             select(CachedAnswer).where(CachedAnswer.question == question)
         )
@@ -93,12 +59,6 @@ class SQLAlchemyCacheRepository:
         }
 
     async def get_all_cached_questions(self) -> list[dict]:
-        """
-        Get all cache entries for similarity comparison.
-
-        Returns:
-            List of cache entry dicts with fields needed for similarity matching
-        """
         result = await self.session.execute(select(CachedAnswer))
         caches = result.scalars().all()
 
@@ -126,21 +86,6 @@ class SQLAlchemyCacheRepository:
         expires_at: datetime | None = None,
         context_preview: str | None = None,
     ) -> int:
-        """
-        Create new cache entry with context-aware key and TTL.
-
-        Args:
-            cache_key: SHA256 hash of (context || question)
-            question: Original question text
-            tfidf_vector: Serialized TF-IDF vector
-            answer: First answer variation
-            cache_type: "knowledge" or "conversational"
-            expires_at: When this entry expires
-            context_preview: Truncated context for debugging
-
-        Returns:
-            Created cache entry ID
-        """
         cache = CachedAnswer(
             cache_key=cache_key,
             question=question,
@@ -160,13 +105,6 @@ class SQLAlchemyCacheRepository:
         return cache.id
 
     async def add_variation(self, cache_id: int, answer: str) -> None:
-        """
-        Add answer variation to existing cache entry (max 3).
-
-        Args:
-            cache_id: Cache entry ID
-            answer: New answer variation
-        """
         result = await self.session.execute(select(CachedAnswer).where(CachedAnswer.id == cache_id))
         cache = result.scalar_one_or_none()
 
@@ -181,17 +119,6 @@ class SQLAlchemyCacheRepository:
             await self.session.commit()
 
     async def get_next_variation(self, cache_id: int) -> str:
-        """
-        Get next answer variation and rotate index.
-
-        Also updates hit_count and last_used timestamp.
-
-        Args:
-            cache_id: Cache entry ID
-
-        Returns:
-            Answer variation string
-        """
         result = await self.session.execute(select(CachedAnswer).where(CachedAnswer.id == cache_id))
         cache = result.scalar_one_or_none()
 
@@ -201,10 +128,8 @@ class SQLAlchemyCacheRepository:
         variations: list[str] = json.loads(cache.variations)
         current_index = cache.variation_index
 
-        # Get answer at current index
         answer = variations[current_index]
 
-        # Rotate to next index (0 -> 1 -> 2 -> 0)
         cache.variation_index = (current_index + 1) % len(variations)
         cache.hit_count += 1
         cache.last_used = datetime.utcnow()
@@ -214,12 +139,6 @@ class SQLAlchemyCacheRepository:
         return answer
 
     async def delete_expired(self) -> int:
-        """
-        Delete all expired cache entries.
-
-        Returns:
-            Number of entries deleted
-        """
         result = cast(
             "CursorResult[tuple[()]]",
             await self.session.execute(
@@ -230,7 +149,6 @@ class SQLAlchemyCacheRepository:
         return result.rowcount or 0
 
     async def clear_all_cache(self) -> int:
-        """Delete all cached answers."""
         result = cast(
             "CursorResult[tuple[()]]",
             await self.session.execute(delete(CachedAnswer)),
@@ -241,25 +159,11 @@ class SQLAlchemyCacheRepository:
     async def list_cache_entries(
         self, page: int = 1, limit: int = 20, sort_by: str = "last_used", order: str = "desc"
     ) -> dict:
-        """
-        List cache entries with pagination.
-
-        Args:
-            page: Page number (1-indexed)
-            limit: Entries per page
-            sort_by: Field to sort by (hit_count, created_at, last_used, expires_at)
-            order: Sort order (asc, desc)
-
-        Returns:
-            Dict with entries, total count, and pagination info
-        """
         offset = (page - 1) * limit
 
-        # Get total count
         count_result = await self.session.execute(select(func.count(CachedAnswer.id)))
         total = count_result.scalar()
 
-        # Build query with sorting
         query = select(CachedAnswer)
 
         sort_columns = {
@@ -305,7 +209,6 @@ class SQLAlchemyCacheRepository:
         }
 
     async def get_cache_by_id(self, cache_id: int) -> dict | None:
-        """Get single cache entry by ID."""
         result = await self.session.execute(select(CachedAnswer).where(CachedAnswer.id == cache_id))
         cache = result.scalar_one_or_none()
 
@@ -328,7 +231,6 @@ class SQLAlchemyCacheRepository:
         }
 
     async def delete_cache_by_id(self, cache_id: int) -> bool:
-        """Delete single cache entry by ID."""
         result = cast(
             "CursorResult[tuple[()]]",
             await self.session.execute(delete(CachedAnswer).where(CachedAnswer.id == cache_id)),
@@ -337,23 +239,20 @@ class SQLAlchemyCacheRepository:
         return (result.rowcount or 0) > 0
 
     async def update_cache_variations(self, cache_id: int, variations: list[str]) -> bool:
-        """Update cache variations (max 3)."""
         result = await self.session.execute(select(CachedAnswer).where(CachedAnswer.id == cache_id))
         cache = result.scalar_one_or_none()
 
         if not cache:
             return False
 
-        # Enforce max 3 variations
         variations = variations[:3]
         cache.variations = json.dumps(variations)
-        cache.variation_index = 0  # Reset rotation
+        cache.variation_index = 0
 
         await self.session.commit()
         return True
 
     async def search_cache(self, query: str, limit: int = 20) -> list[dict]:
-        """Search cache entries by question text (case-insensitive)."""
         result = await self.session.execute(
             select(CachedAnswer)
             .where(CachedAnswer.question.ilike(f"%{query}%"))

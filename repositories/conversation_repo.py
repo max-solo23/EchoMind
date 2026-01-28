@@ -1,12 +1,3 @@
-"""
-SQLAlchemy implementation of ConversationRepository.
-
-Learning notes:
-- Uses async sessions (AsyncSession)
-- Each method is a transaction (commits automatically)
-- Handles errors and rollbacks
-"""
-
 import json
 
 from sqlalchemy import delete, desc, func, select
@@ -17,33 +8,16 @@ from models.models import Conversation, Session
 
 
 class SQLAlchemyConversationRepository:
-    """Concrete implementation using SQLAlchemy."""
-
     def __init__(self, session: AsyncSession):
-        """
-        Inject database session.
-
-        Why dependency injection?
-        - Testing: can inject mock session
-        - Flexibility: session lifecycle managed externally
-        - Transaction control: caller decides when to commit
-        """
         self.session = session
 
     async def create_session(self, session_id: str, user_ip: str | None) -> int:
-        """
-        Create new session or return existing.
-
-        Returns: Database ID (integer primary key)
-        """
-        # Check if session already exists
         result = await self.session.execute(select(Session).where(Session.session_id == session_id))
         existing = result.scalar_one_or_none()
 
         if existing:
             return existing.id
 
-        # Create new session
         new_session = Session(session_id=session_id, user_ip=user_ip)
         self.session.add(new_session)
         await self.session.commit()
@@ -60,7 +34,6 @@ class SQLAlchemyConversationRepository:
         evaluator_used: bool = False,
         evaluator_passed: bool | None = None,
     ) -> int:
-        """Log conversation linked to session."""
 
         conversation = Conversation(
             session_id=session_db_id,
@@ -78,8 +51,6 @@ class SQLAlchemyConversationRepository:
         return conversation.id
 
     async def get_session_by_id(self, session_id: str) -> dict | None:
-        """Get session with all conversations."""
-
         result = await self.session.execute(
             select(Session)
             .where(Session.session_id == session_id)
@@ -108,18 +79,11 @@ class SQLAlchemyConversationRepository:
     async def list_sessions(
         self, page: int = 1, limit: int = 20, sort_by: str = "created_at", order: str = "desc"
     ) -> dict:
-        """
-        List all sessions with pagination.
-
-        Returns dict with sessions list and pagination info.
-        """
         offset = (page - 1) * limit
 
-        # Get total count
         count_result = await self.session.execute(select(func.count(Session.id)))
         total = count_result.scalar()
 
-        # Build query with sorting
         query = select(Session).options(selectinload(Session.conversations))
 
         if sort_by == "created_at":
@@ -155,15 +119,6 @@ class SQLAlchemyConversationRepository:
         }
 
     async def delete_session(self, session_id: str) -> bool:
-        """
-        Delete a session and all its conversations.
-
-        Args:
-            session_id: Session identifier string
-
-        Returns:
-            True if session was deleted, False if not found
-        """
         result = await self.session.execute(select(Session).where(Session.session_id == session_id))
         session_obj = result.scalar_one_or_none()
 
@@ -175,22 +130,10 @@ class SQLAlchemyConversationRepository:
         return True
 
     async def clear_all_sessions(self) -> int:
-        """
-        Delete all sessions and their conversations.
-
-        Deletes conversations first to avoid foreign key constraint violations.
-
-        Returns:
-            Number of sessions deleted
-        """
-        # Count sessions before deletion
         result = await self.session.execute(select(func.count(Session.id)))
         count = result.scalar() or 0
 
-        # Delete conversations first (they reference sessions)
         await self.session.execute(delete(Conversation))
-
-        # Then delete sessions
         await self.session.execute(delete(Session))
 
         await self.session.commit()

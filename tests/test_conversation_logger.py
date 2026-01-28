@@ -1,6 +1,4 @@
-"""Tests for ConversationLogger - orchestration service."""
-
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -9,19 +7,16 @@ from services.conversation_logger import ConversationLogger
 
 @pytest.fixture
 def mock_conversation_repo():
-    """Create mocked conversation repository."""
     return AsyncMock()
 
 
 @pytest.fixture
 def mock_cache_service():
-    """Create mocked cache service."""
     return AsyncMock()
 
 
 @pytest.fixture
 def logger(mock_conversation_repo, mock_cache_service):
-    """Create logger with mocked dependencies."""
     return ConversationLogger(
         conversation_repo=mock_conversation_repo,
         cache_service=mock_cache_service,
@@ -30,15 +25,7 @@ def logger(mock_conversation_repo, mock_cache_service):
 
 
 class TestConversationLoggerInit:
-    """Test initialization."""
-
     def test_stores_dependencies(self, mock_conversation_repo, mock_cache_service):
-        """
-        Verify dependencies are stored.
-
-        Why: Logger orchestrates between repo and cache service.
-        If not stored, all operations fail.
-        """
         logger = ConversationLogger(
             conversation_repo=mock_conversation_repo, cache_service=mock_cache_service
         )
@@ -48,12 +35,6 @@ class TestConversationLoggerInit:
         assert logger.enable_caching is True
 
     def test_caching_can_be_disabled(self, mock_conversation_repo, mock_cache_service):
-        """
-        Verify caching can be turned off.
-
-        Why: Some deployments may not want caching (testing, debugging).
-        Should be configurable at init time.
-        """
         logger = ConversationLogger(
             conversation_repo=mock_conversation_repo,
             cache_service=mock_cache_service,
@@ -64,16 +45,8 @@ class TestConversationLoggerInit:
 
 
 class TestGetOrCreateSession:
-    """Test session management."""
-
     @pytest.mark.asyncio
     async def test_delegates_to_repo(self, logger, mock_conversation_repo):
-        """
-        Verify delegates to conversation repo.
-
-        Why: Logger is orchestrator, not implementation.
-        Session creation is repo's responsibility.
-        """
         mock_conversation_repo.create_session.return_value = 42
 
         result = await logger.get_or_create_session("sess_123", "192.168.1.1")
@@ -83,15 +56,8 @@ class TestGetOrCreateSession:
 
 
 class TestCheckCache:
-    """Test cache lookup."""
-
     @pytest.mark.asyncio
     async def test_returns_cached_answer(self, logger, mock_cache_service):
-        """
-        Verify returns cached answer when found.
-
-        Why: Core caching functionality - avoid LLM calls for known questions.
-        """
         mock_cache_service.get_cached_answer.return_value = "Cached response"
 
         result = await logger.check_cache("What is Python?", None, False)
@@ -102,11 +68,6 @@ class TestCheckCache:
     async def test_returns_none_when_caching_disabled(
         self, mock_conversation_repo, mock_cache_service
     ):
-        """
-        Verify returns None when caching is disabled.
-
-        Why: When enable_caching=False, should skip cache entirely.
-        """
         logger = ConversationLogger(
             conversation_repo=mock_conversation_repo,
             cache_service=mock_cache_service,
@@ -120,16 +81,8 @@ class TestCheckCache:
 
 
 class TestLogAndCache:
-    """Test logging with caching."""
-
     @pytest.mark.asyncio
     async def test_logs_conversation(self, logger, mock_conversation_repo):
-        """
-        Verify conversation is always logged.
-
-        Why: All conversations must be logged for history/analytics,
-        regardless of caching settings.
-        """
         mock_conversation_repo.log_conversation.return_value = 99
 
         result = await logger.log_and_cache(
@@ -143,11 +96,6 @@ class TestLogAndCache:
     async def test_caches_response_when_enabled(
         self, logger, mock_cache_service, mock_conversation_repo
     ):
-        """
-        Verify response is cached when caching enabled.
-
-        Why: After LLM response, cache it for future identical questions.
-        """
         mock_conversation_repo.log_conversation.return_value = 1
 
         await logger.log_and_cache(
@@ -161,11 +109,8 @@ class TestLogAndCache:
 
 
 class TestDelegationMethods:
-    """Test passthrough methods to underlying services."""
-
     @pytest.mark.asyncio
     async def test_get_session_history(self, logger, mock_conversation_repo):
-        """Verify delegates to repo."""
         mock_conversation_repo.get_session_by_id.return_value = {"id": 1}
 
         result = await logger.get_session_history("sess_123")
@@ -174,7 +119,6 @@ class TestDelegationMethods:
 
     @pytest.mark.asyncio
     async def test_get_cache_stats(self, logger, mock_cache_service):
-        """Verify delegates to cache service."""
         mock_cache_service.get_cache_stats.return_value = {"total": 10}
 
         result = await logger.get_cache_stats()
@@ -183,7 +127,6 @@ class TestDelegationMethods:
 
     @pytest.mark.asyncio
     async def test_clear_cache(self, logger, mock_cache_service):
-        """Verify delegates to cache service."""
         mock_cache_service.clear_cache.return_value = 5
 
         result = await logger.clear_cache()
@@ -192,7 +135,6 @@ class TestDelegationMethods:
 
     @pytest.mark.asyncio
     async def test_cleanup_expired_cache(self, logger, mock_cache_service):
-        """Verify delegates to cache service."""
         mock_cache_service.cleanup_expired.return_value = 3
 
         result = await logger.cleanup_expired_cache()
@@ -201,11 +143,8 @@ class TestDelegationMethods:
 
 
 class TestAdminMethods:
-    """Test admin/dashboard methods."""
-
     @pytest.mark.asyncio
     async def test_list_sessions(self, logger, mock_conversation_repo):
-        """Verify list_sessions delegates to repo."""
         mock_conversation_repo.list_sessions.return_value = {"sessions": [], "total": 0}
 
         result = await logger.list_sessions(page=1, limit=10)
@@ -215,7 +154,6 @@ class TestAdminMethods:
 
     @pytest.mark.asyncio
     async def test_list_cache_entries(self, logger, mock_cache_service):
-        """Verify list_cache_entries delegates to cache service."""
         mock_cache_service.list_cache_entries.return_value = {"entries": []}
 
         result = await logger.list_cache_entries(page=2, limit=15)
@@ -224,7 +162,6 @@ class TestAdminMethods:
 
     @pytest.mark.asyncio
     async def test_get_cache_entry(self, logger, mock_cache_service):
-        """Verify get_cache_entry delegates to cache service."""
         mock_cache_service.get_cache_by_id.return_value = {"id": 1, "question": "Test"}
 
         result = await logger.get_cache_entry(1)
@@ -233,7 +170,6 @@ class TestAdminMethods:
 
     @pytest.mark.asyncio
     async def test_delete_cache_entry(self, logger, mock_cache_service):
-        """Verify delete_cache_entry delegates to cache service."""
         mock_cache_service.delete_cache_by_id.return_value = True
 
         result = await logger.delete_cache_entry(1)
@@ -242,7 +178,6 @@ class TestAdminMethods:
 
     @pytest.mark.asyncio
     async def test_update_cache_entry(self, logger, mock_cache_service):
-        """Verify update_cache_entry delegates to cache service."""
         mock_cache_service.update_cache_variations.return_value = True
 
         result = await logger.update_cache_entry(1, ["var1", "var2"])
@@ -252,7 +187,6 @@ class TestAdminMethods:
 
     @pytest.mark.asyncio
     async def test_search_cache(self, logger, mock_cache_service):
-        """Verify search_cache delegates to cache service."""
         mock_cache_service.search_cache.return_value = [{"question": "Python"}]
 
         result = await logger.search_cache("python", limit=10)
@@ -261,7 +195,6 @@ class TestAdminMethods:
 
     @pytest.mark.asyncio
     async def test_delete_session(self, logger, mock_conversation_repo):
-        """Verify delete_session delegates to repo."""
         mock_conversation_repo.delete_session.return_value = True
 
         result = await logger.delete_session("sess_123")
@@ -270,7 +203,6 @@ class TestAdminMethods:
 
     @pytest.mark.asyncio
     async def test_clear_all_sessions(self, logger, mock_conversation_repo):
-        """Verify clear_all_sessions delegates to repo."""
         mock_conversation_repo.clear_all_sessions.return_value = 10
 
         result = await logger.clear_all_sessions()

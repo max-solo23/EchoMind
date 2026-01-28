@@ -46,7 +46,6 @@ def mock_llm_provider():
 
 @pytest.fixture
 def sample_chat_history():
-    """Example of chat history for testing conversations."""
     return [
         {"role": "user", "content": "What's your name?"},
         {"role": "assistant", "content": "I'm EchoMind"},
@@ -57,8 +56,6 @@ def sample_chat_history():
 
 @pytest.fixture
 def temp_persona_file():
-    """Create a temporary persona YAML file for testing."""
-
     temp_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
         mode="w", delete=False, suffix=".yaml"
     )

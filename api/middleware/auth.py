@@ -4,7 +4,6 @@ from api.dependencies import get_config
 
 
 async def verify_api_key(x_api_key: str = Header(...)) -> None:
-    """Verify API key from X-API-Key header."""
     config = get_config()
 
     if not config.api_key:

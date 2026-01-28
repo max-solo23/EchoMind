@@ -115,7 +115,7 @@ def _create_tool_call_object(tool_call_dict: dict) -> SimpleNamespace:
 class Chat:
     def __init__(
         self,
-        person,
+        persona,
         llm: LLMProvider,
         llm_model: str,
         llm_tools,
@@ -123,7 +123,7 @@ class Chat:
         self.llm = llm
         self.llm_model = llm_model
         self.llm_tools = llm_tools
-        self.person = person
+        self.persona = persona
         self.supports_tools = llm.capabilities.get("tools", False)
 
     @staticmethod
@@ -171,7 +171,7 @@ class Chat:
     def chat(self, message: str, history: list[dict]) -> str:
         self._validate_message(message)
 
-        messages = _build_messages(self.person.system_prompt, history, message)
+        messages = _build_messages(self.persona.system_prompt, history, message)
 
         try:
             return self._run_completion_loop(messages)
@@ -195,7 +195,7 @@ class Chat:
             )
 
     async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[bytes, None]:
-        messages = _build_messages(self.person.system_prompt, history, message)
+        messages = _build_messages(self.persona.system_prompt, history, message)
 
         try:
             yield (":" + (" " * SSE_KICKSTART_BUFFER_SIZE) + "\n\n").encode("utf-8")

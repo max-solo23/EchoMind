@@ -14,18 +14,6 @@ if TYPE_CHECKING:
 
 
 class GeminiProvider(LLMProvider):
-    """
-    Minimal Gemini provider using the public REST API (no extra SDK dependency).
-
-    Supports:
-    - non-streaming text generation via `generateContent`
-    - streaming text deltas via `streamGenerateContent`
-
-    Notes:
-    - Tool/function calling is not implemented in this provider yet.
-    - Messages are accepted in OpenAI-style [{role, content}, ...] and converted.
-    """
-
     def __init__(
         self,
         *,
@@ -145,12 +133,10 @@ class GeminiProvider(LLMProvider):
         messages: list[dict],
         response_format: Any,
     ) -> Any:
-        """Gemini provider does not support structured outputs via parse()."""
         raise NotImplementedError("GeminiProvider does not support structured outputs")
 
     @property
     def capabilities(self) -> dict[str, bool]:
-        """Gemini has limited capabilities - no tool calling or structured outputs."""
         return {
             "tools": False,
             "streaming": True,

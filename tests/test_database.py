@@ -1,5 +1,3 @@
-"""Tests for database.py - async SQLAlchemy session management."""
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,24 +8,15 @@ from repositories import connection as database
 
 @pytest.fixture(autouse=True)
 def reset_database_globals():
-    """
-    Reset singleton globals before each test.
-
-    Why: Singleton pattern uses module-level globals (_engine, _async_session_factory).
-    Without reset, tests affect each other - test A creates engine, test B gets same one.
-    This fixture ensures each test starts with fresh state.
-    """
     database._engine = None
     database._async_session_factory = None
     yield
-    # Also reset after test
     database._engine = None
     database._async_session_factory = None
 
 
 @pytest.fixture
 def mock_config():
-    """Create mock Config with database settings."""
     config = MagicMock(spec=Config)
     config.database_url = "postgresql+asyncpg://user:pass@localhost/testdb"
     config.db_pool_size = 5
@@ -37,16 +26,8 @@ def mock_config():
 
 
 class TestGetEngine:
-    """Test engine creation and singleton pattern."""
-
     @patch("repositories.connection.create_async_engine")
     def test_creates_engine_with_config(self, mock_create_engine, mock_config):
-        """
-        Verify engine is created with correct parameters.
-
-        Why: Engine configuration (pool size, timeouts) affects performance
-        and reliability. Wrong settings could cause connection exhaustion.
-        """
         mock_engine = MagicMock()
         mock_create_engine.return_value = mock_engine
 
@@ -63,12 +44,6 @@ class TestGetEngine:
 
     @patch("repositories.connection.create_async_engine")
     def test_returns_same_engine_on_second_call(self, mock_create_engine, mock_config):
-        """
-        Verify singleton pattern - engine created once.
-
-        Why: Creating multiple engines wastes resources and can exhaust
-        connection pool. Singleton ensures one shared engine.
-        """
         mock_engine = MagicMock()
         mock_create_engine.return_value = mock_engine
 
@@ -76,15 +51,9 @@ class TestGetEngine:
         engine2 = database.get_engine(mock_config)
 
         assert engine1 is engine2
-        mock_create_engine.assert_called_once()  # Only once, not twice
+        mock_create_engine.assert_called_once()
 
     def test_raises_when_no_database_url(self, mock_config):
-        """
-        Verify RuntimeError raised when database_url is None.
-
-        Why: Clear error message helps debugging deployment issues.
-        Better than cryptic SQLAlchemy error when URL is None.
-        """
         mock_config.database_url = None
 
         with pytest.raises(RuntimeError) as exc_info:
@@ -94,17 +63,9 @@ class TestGetEngine:
 
 
 class TestGetSessionFactory:
-    """Test session factory creation."""
-
     @patch("repositories.connection.async_sessionmaker")
     @patch("repositories.connection.get_engine")
     def test_creates_factory_with_engine(self, mock_get_engine, mock_sessionmaker, mock_config):
-        """
-        Verify factory created with correct engine and settings.
-
-        Why: Factory settings (expire_on_commit, autoflush) affect ORM behavior.
-        expire_on_commit=False prevents detached instance errors.
-        """
         mock_engine = MagicMock()
         mock_get_engine.return_value = mock_engine
         mock_factory = MagicMock()
@@ -120,11 +81,6 @@ class TestGetSessionFactory:
     def test_returns_same_factory_on_second_call(
         self, mock_get_engine, mock_sessionmaker, mock_config
     ):
-        """
-        Verify singleton pattern for factory.
-
-        Why: Same as engine - avoid creating multiple factories.
-        """
         mock_engine = MagicMock()
         mock_get_engine.return_value = mock_engine
         mock_factory = MagicMock()
@@ -138,17 +94,9 @@ class TestGetSessionFactory:
 
 
 class TestGetSession:
-    """Test session context manager."""
-
     @pytest.mark.asyncio
     @patch("repositories.connection.get_session_factory")
     async def test_yields_session_and_closes(self, mock_get_factory, mock_config):
-        """
-        Verify session is yielded and closed on exit.
-
-        Why: Unclosed sessions leak connections. Context manager ensures
-        cleanup even if code forgets to close explicitly.
-        """
         mock_session = AsyncMock()
         mock_factory = MagicMock(return_value=mock_session)
         mock_get_factory.return_value = mock_factory
@@ -161,12 +109,6 @@ class TestGetSession:
     @pytest.mark.asyncio
     @patch("repositories.connection.get_session_factory")
     async def test_rollbacks_on_exception(self, mock_get_factory, mock_config):
-        """
-        Verify rollback called when exception raised in context.
-
-        Why: If code raises inside the context, partial changes should
-        be rolled back to maintain database consistency.
-        """
         mock_session = AsyncMock()
         mock_factory = MagicMock(return_value=mock_session)
         mock_get_factory.return_value = mock_factory
@@ -180,16 +122,8 @@ class TestGetSession:
 
 
 class TestCloseDatabase:
-    """Test database shutdown."""
-
     @pytest.mark.asyncio
     async def test_disposes_engine_and_resets_globals(self):
-        """
-        Verify engine disposed and globals reset.
-
-        Why: On shutdown, connections must be closed cleanly.
-        Resetting globals allows fresh start if app restarts.
-        """
         mock_engine = AsyncMock()
         database._engine = mock_engine
         database._async_session_factory = MagicMock()
@@ -202,13 +136,6 @@ class TestCloseDatabase:
 
     @pytest.mark.asyncio
     async def test_handles_already_closed(self):
-        """
-        Verify no error when engine is already None.
-
-        Why: Idempotent shutdown - calling close twice shouldn't error.
-        Important for graceful shutdown handlers that might run multiple times.
-        """
         database._engine = None
 
-        # Should not raise
         await database.close_database()

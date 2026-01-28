@@ -5,7 +5,6 @@ from api.dependencies import get_config
 
 
 def setup_cors(app: FastAPI) -> None:
-    """Configure CORS middleware for portfolio website access."""
     config = get_config()
 
     if not config.allowed_origins:

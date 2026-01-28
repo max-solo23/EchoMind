@@ -13,15 +13,6 @@ if TYPE_CHECKING:
 
 
 class OpenAICompatibleProvider(LLMProvider):
-    """
-    OpenAI SDK wrapper that also works with OpenAI-compatible APIs by setting base_url.
-
-    Examples:
-    - DeepSeek (OpenAI-compatible)
-    - xAI Grok (OpenAI-compatible)
-    - Ollama (http://localhost:11434/v1)
-    """
-
     def __init__(
         self,
         *,
@@ -102,7 +93,6 @@ class OpenAICompatibleProvider(LLMProvider):
         messages: list[dict],
         response_format: Any,
     ) -> Any:
-        # Only available for providers that support the OpenAI SDK's structured outputs.
         return self._client.chat.completions.parse(
             model=model,
             messages=messages,  # type: ignore[arg-type]
@@ -111,7 +101,6 @@ class OpenAICompatibleProvider(LLMProvider):
 
     @property
     def capabilities(self) -> dict[str, bool]:
-        """OpenAI-compatible providers support all features."""
         return {
             "tools": True,
             "streaming": True,

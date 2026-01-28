@@ -1,14 +1,3 @@
-"""
-Admin API routes for EchoMind.
-
-Provides endpoints for:
-- Cache management (stats, clear)
-- Session history viewing
-- System health with database status
-
-All admin endpoints require API key authentication.
-"""
-
 from datetime import datetime
 from enum import Enum
 
@@ -28,7 +17,6 @@ from api.middleware.rate_limit_state import rate_limit_state
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"], dependencies=[Depends(verify_api_key)])
 
 
-# Response models
 class CacheStats(BaseModel):
     total_questions: int
     total_variations: int
@@ -67,9 +55,6 @@ class AdminHealthResponse(BaseModel):
     status: str
     database: DatabaseStatus
     cache: CacheStats | None = None
-
-
-# New response models for pagination
 
 
 class SessionSummary(BaseModel):
@@ -196,11 +181,10 @@ class RateLimitSettings(BaseModel):
 
 class UpdateRateLimitRequest(BaseModel):
     enabled: bool | None = None
-    rate_per_hour: int | None = Field(None, ge=1, description="Requests per hour (minimum 1)")
+    rate_per_hour: int | None = Field(None, ge=1)
 
 
 def require_database():
-    """Dependency that ensures database is configured."""
     if not is_database_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -210,11 +194,6 @@ def require_database():
 
 @router.get("/health", response_model=AdminHealthResponse)
 async def admin_health():
-    """
-    Extended health check with database status.
-
-    Returns system status including database connectivity and cache stats.
-    """
     db_status = DatabaseStatus(configured=is_database_configured(), connected=False)
 
     cache_stats = None
@@ -242,14 +221,6 @@ async def admin_health():
 
 @router.get("/cache/stats", response_model=CacheStats, dependencies=[Depends(require_database)])
 async def get_cache_stats(session: AsyncSession = Depends(get_db_session)):
-    """
-    Get cache statistics.
-
-    Returns:
-    - total_questions: Number of cached questions
-    - total_variations: Total answer variations stored
-    - avg_variations_per_question: Average variations per question
-    """
     logger = await get_conversation_logger(session)
     stats = await logger.get_cache_stats()
     return CacheStats(**stats)
@@ -259,11 +230,6 @@ async def get_cache_stats(session: AsyncSession = Depends(get_db_session)):
     "/cache", response_model=ClearCacheResponse, dependencies=[Depends(require_database)]
 )
 async def clear_cache(session: AsyncSession = Depends(get_db_session)):
-    """
-    Clear all cached answers.
-
-    Use with caution - this will delete all cached question/answer pairs.
-    """
     logger = await get_conversation_logger(session)
     deleted = await logger.clear_cache()
     return ClearCacheResponse(success=True, deleted_count=deleted)
@@ -275,15 +241,6 @@ async def clear_cache(session: AsyncSession = Depends(get_db_session)):
     dependencies=[Depends(require_database)],
 )
 async def get_session_history(session_id: str, session: AsyncSession = Depends(get_db_session)):
-    """
-    Get conversation history for a session.
-
-    Args:
-        session_id: The session identifier string
-
-    Returns:
-        Session details with all conversations
-    """
     logger = await get_conversation_logger(session)
     history = await logger.get_session_history(session_id)
 
@@ -301,24 +258,16 @@ async def get_session_history(session_id: str, session: AsyncSession = Depends(g
     )
 
 
-# ============= NEW ENDPOINTS =============
-
-
 @router.get(
     "/sessions", response_model=SessionListResponse, dependencies=[Depends(require_database)]
 )
 async def list_sessions(
-    page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(20, ge=1, le=100, description="Items per page"),
-    sort_by: SessionSortBy = Query(SessionSortBy.created_at, description="Sort field"),
-    order: SortOrder = Query(SortOrder.desc, description="Sort order"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    sort_by: SessionSortBy = Query(SessionSortBy.created_at),
+    order: SortOrder = Query(SortOrder.desc),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """
-    List all sessions with pagination.
-
-    Supports sorting by created_at or last_activity.
-    """
     logger = await get_conversation_logger(session)
     result = await logger.list_sessions(page, limit, sort_by.value, order.value)
 
@@ -337,15 +286,6 @@ async def list_sessions(
     dependencies=[Depends(require_database)],
 )
 async def delete_session(session_id: str, session: AsyncSession = Depends(get_db_session)):
-    """
-    Delete a session and all its conversations.
-
-    Args:
-        session_id: The session identifier string
-
-    Returns:
-        Success status with deleted session ID
-    """
     logger = await get_conversation_logger(session)
     success = await logger.delete_session(session_id)
 
@@ -361,14 +301,6 @@ async def delete_session(session_id: str, session: AsyncSession = Depends(get_db
     "/sessions", response_model=ClearSessionsResponse, dependencies=[Depends(require_database)]
 )
 async def clear_all_sessions(session: AsyncSession = Depends(get_db_session)):
-    """
-    Delete all sessions and their conversations.
-
-    Use with caution - this will delete all session history.
-
-    Returns:
-        Success status with count of deleted sessions
-    """
     logger = await get_conversation_logger(session)
     deleted = await logger.clear_all_sessions()
     return ClearSessionsResponse(success=True, deleted_count=deleted)
@@ -378,17 +310,12 @@ async def clear_all_sessions(session: AsyncSession = Depends(get_db_session)):
     "/cache/entries", response_model=CacheListResponse, dependencies=[Depends(require_database)]
 )
 async def list_cache_entries(
-    page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(20, ge=1, le=100, description="Items per page"),
-    sort_by: CacheSortBy = Query(CacheSortBy.last_used, description="Sort field"),
-    order: SortOrder = Query(SortOrder.desc, description="Sort order"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    sort_by: CacheSortBy = Query(CacheSortBy.last_used),
+    order: SortOrder = Query(SortOrder.desc),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """
-    List all cache entries with pagination.
-
-    Supports sorting by hit_count, created_at, or last_used.
-    """
     logger = await get_conversation_logger(session)
     result = await logger.list_cache_entries(page, limit, sort_by.value, order.value)
 
@@ -405,15 +332,10 @@ async def list_cache_entries(
     "/cache/search", response_model=CacheSearchResponse, dependencies=[Depends(require_database)]
 )
 async def search_cache(
-    q: str = Query(..., min_length=1, description="Search query"),
-    limit: int = Query(20, ge=1, le=100, description="Max results"),
+    q: str = Query(..., min_length=1),
+    limit: int = Query(20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """
-    Search cache entries by question text.
-
-    Case-insensitive partial match.
-    """
     logger = await get_conversation_logger(session)
     results = await logger.search_cache(q, limit)
 
@@ -426,11 +348,6 @@ async def search_cache(
     "/cache/{cache_id}", response_model=CacheEntryDetail, dependencies=[Depends(require_database)]
 )
 async def get_cache_entry(cache_id: int, session: AsyncSession = Depends(get_db_session)):
-    """
-    Get single cache entry by ID.
-
-    Returns full details including TF-IDF vector.
-    """
     logger = await get_conversation_logger(session)
     entry = await logger.get_cache_entry(cache_id)
 
@@ -450,11 +367,6 @@ async def get_cache_entry(cache_id: int, session: AsyncSession = Depends(get_db_
 async def update_cache_entry(
     cache_id: int, request: UpdateCacheRequest, session: AsyncSession = Depends(get_db_session)
 ):
-    """
-    Update cache entry variations.
-
-    Accepts 1-3 variations. Resets rotation index to 0.
-    """
     logger = await get_conversation_logger(session)
     success = await logger.update_cache_entry(cache_id, request.variations)
 
@@ -472,9 +384,6 @@ async def update_cache_entry(
     dependencies=[Depends(require_database)],
 )
 async def delete_cache_entry(cache_id: int, session: AsyncSession = Depends(get_db_session)):
-    """
-    Delete single cache entry by ID.
-    """
     logger = await get_conversation_logger(session)
     success = await logger.delete_cache_entry(cache_id)
 
@@ -492,16 +401,6 @@ async def delete_cache_entry(cache_id: int, session: AsyncSession = Depends(get_
     dependencies=[Depends(require_database)],
 )
 async def cleanup_expired_cache(session: AsyncSession = Depends(get_db_session)):
-    """
-    Delete all expired cache entries.
-
-    Call periodically to clean up stale cache entries.
-    Entries are considered expired when expires_at < current time.
-
-    Returns:
-    - success: Always true if operation completes
-    - deleted_count: Number of expired entries deleted
-    """
     logger = await get_conversation_logger(session)
     deleted = await logger.cleanup_expired_cache()
     return CleanupExpiredResponse(success=True, deleted_count=deleted)
@@ -509,30 +408,11 @@ async def cleanup_expired_cache(session: AsyncSession = Depends(get_db_session))
 
 @router.get("/rate-limit", response_model=RateLimitSettings)
 async def get_rate_limit_settings():
-    """
-    Get current rate limit settings.
-
-    Returns:
-    - enabled: Whether rate limiting is currently active
-    - rate_per_hour: Current rate limit (requests per hour)
-    """
     return RateLimitSettings(**rate_limit_state.get_settings())
 
 
 @router.post("/rate-limit", response_model=RateLimitSettings)
 async def update_rate_limit_settings(request: UpdateRateLimitRequest):
-    """
-    Update rate limit settings dynamically.
-
-    Can enable/disable rate limiting or change the rate limit without server restart.
-
-    Args:
-    - enabled: Set to true/false to enable/disable rate limiting
-    - rate_per_hour: New rate limit (minimum 1 request per hour)
-
-    Returns:
-    - Current rate limit settings after update
-    """
     try:
         rate_limit_state.update_settings(
             enabled=request.enabled, rate_per_hour=request.rate_per_hour

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import Config
 from core.chat import Chat
 from core.llm import create_llm_provider
-from core.persona import Me
+from core.persona import Persona
 from repositories.cache_repo import SQLAlchemyCacheRepository
 from repositories.connection import get_session
 from repositories.conversation_repo import SQLAlchemyConversationRepository
@@ -22,9 +22,9 @@ def get_config() -> Config:
     return Config.from_env()
 
 @lru_cache
-def get_persona() -> Me:
+def get_persona() -> Persona:
     config = get_config()
-    return Me(config.persona_name, config.persona_file)
+    return Persona(config.persona_name, config.persona_file)
 
 @lru_cache
 def get_chat_service() -> Chat:
@@ -38,7 +38,7 @@ def get_chat_service() -> Chat:
             flush=True,
         )
 
-    me = get_persona()
+    persona = get_persona()
     pushover: PushOver | None = None
 
     if config.pushover_token and config.pushover_user:
@@ -46,7 +46,7 @@ def get_chat_service() -> Chat:
 
     tools = Tools(pushover)
 
-    return Chat(me, llm_provider, config.llm_model, tools)
+    return Chat(persona, llm_provider, config.llm_model, tools)
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:

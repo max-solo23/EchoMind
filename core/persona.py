@@ -1,7 +1,7 @@
 import hashlib
 
 
-class Me:
+class Persona:
     def __init__(self, name: str, persona_yaml_file: str):
         self.name = name
         with open(persona_yaml_file, encoding="utf-8") as f:
