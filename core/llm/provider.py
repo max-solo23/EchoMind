@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class LLMProvider(Protocol):
-    def complete(
+    async def complete(
         self,
         *,
         model: str,

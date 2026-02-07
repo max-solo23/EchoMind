@@ -29,7 +29,7 @@ def config(mock_env_vars, monkeypatch):
 @pytest.fixture
 def mock_llm_provider():
     class MockLLM:
-        def complete(self, *, model: str, messages: list[dict], tools: list[dict] | None = None):
+        async def complete(self, *, model: str, messages: list[dict], tools: list[dict] | None = None):
             return CompletionResponse(
                 finish_reason="stop",
                 message=CompletionMessage(

@@ -43,7 +43,7 @@ def client(monkeypatch):
 @pytest.fixture
 def mock_chat_service():
     with patch("api.dependencies.get_chat_service") as mock:
-        service = MagicMock()
+        service = AsyncMock()
         service.chat.return_value = "Test response"
         mock.return_value = service
         yield service

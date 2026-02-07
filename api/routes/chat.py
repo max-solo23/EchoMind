@@ -106,7 +106,7 @@ async def _chat_with_logging(
     chat_service: Chat, message: str, history: list[dict], session_id: str, client_ip: str | None
 ) -> str:
     if not is_database_configured():
-        return chat_service.chat(message, history)
+        return await chat_service.chat(message, history)
 
     last_assistant_msg = extract_last_assistant_message(history)
     is_continuation = len(history) > 0
@@ -134,7 +134,7 @@ async def _chat_with_logging(
             )
             return cached_answer
 
-        reply = chat_service.chat(message, history)
+        reply = await chat_service.chat(message, history)
 
         session_db_id = await conversation_logger.get_or_create_session(session_id, client_ip)
         await conversation_logger.log_and_cache(

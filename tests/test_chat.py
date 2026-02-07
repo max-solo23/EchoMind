@@ -45,57 +45,57 @@ class TestChatBasics:
         assert chat.llm_model == "test-model"
         assert chat.persona == persona
 
-    def test_chat_basic_response(self, mock_llm_provider, temp_persona_file, mock_tools):
+    async def test_chat_basic_response(self, mock_llm_provider, temp_persona_file, mock_tools):
         persona = Persona(name="Test User", persona_yaml_file=temp_persona_file)
         chat = Chat(persona=persona, llm=mock_llm_provider, llm_model="test-model", llm_tools=mock_tools)
 
-        response = chat.chat("Hello", [])
+        response = await chat.chat("Hello", [])
 
         assert response == "Mock LLM response"
 
-    def test_chat_with_history(
+    async def test_chat_with_history(
         self, mock_llm_provider, temp_persona_file, sample_chat_history, mock_tools
     ):
         persona = Persona(name="Test User", persona_yaml_file=temp_persona_file)
         chat = Chat(persona=persona, llm=mock_llm_provider, llm_model="test-model", llm_tools=mock_tools)
 
-        response = chat.chat("Tell me more", sample_chat_history)
+        response = await chat.chat("Tell me more", sample_chat_history)
 
         assert response == "Mock LLM response"
 
-    def test_chat_rejects_invalid_message(self, mock_llm_provider, temp_persona_file, mock_tools):
+    async def test_chat_rejects_invalid_message(self, mock_llm_provider, temp_persona_file, mock_tools):
         persona = Persona(name="Test User", persona_yaml_file=temp_persona_file)
         chat = Chat(persona=persona, llm=mock_llm_provider, llm_model="test-model", llm_tools=mock_tools)
 
         with pytest.raises(InvalidMessageError) as exc_info:
-            chat.chat("h", [])
+            await chat.chat("h", [])
 
         assert "invalid" in str(exc_info.value).lower()
 
-    def test_chat_rejects_gibberish(self, mock_llm_provider, temp_persona_file, mock_tools):
+    async def test_chat_rejects_gibberish(self, mock_llm_provider, temp_persona_file, mock_tools):
         persona = Persona(name="Test User", persona_yaml_file=temp_persona_file)
         chat = Chat(persona=persona, llm=mock_llm_provider, llm_model="test-model", llm_tools=mock_tools)
 
         with pytest.raises(InvalidMessageError):
-            chat.chat("!@#$%^&*()", [])
+            await chat.chat("!@#$%^&*()", [])
 
-    def test_chat_handles_llm_error(self, temp_persona_file, mock_tools):
+    async def test_chat_handles_llm_error(self, temp_persona_file, mock_tools):
         class FailingLLM:
             @property
             def capabilities(self):
                 return {"tools": False}
 
-            def complete(self, **kwargs):
+            async def complete(self, **kwargs):
                 raise Exception("LLM failed")
 
         persona = Persona(name="Test User", persona_yaml_file=temp_persona_file)
         chat = Chat(persona=persona, llm=FailingLLM(), llm_model="test", llm_tools=mock_tools)
 
-        response = chat.chat("Hello", [])
+        response = await chat.chat("Hello", [])
 
         assert "unexpected" in response.lower()
 
-    def test_chat_handles_api_timeout_error(self, temp_persona_file, mock_tools):
+    async def test_chat_handles_api_timeout_error(self, temp_persona_file, mock_tools):
         from openai import APITimeoutError
 
         class TimeoutLLM:
@@ -103,13 +103,13 @@ class TestChatBasics:
             def capabilities(self):
                 return {"tools": False}
 
-            def complete(self, **kwargs):
+            async def complete(self, **kwargs):
                 raise APITimeoutError(request=None)
 
         persona = Persona(name="Test User", persona_yaml_file=temp_persona_file)
         chat = Chat(persona=persona, llm=TimeoutLLM(), llm_model="test", llm_tools=mock_tools)
 
-        response = chat.chat("Hello", [])
+        response = await chat.chat("Hello", [])
 
         assert "longer than expected" in response.lower()
 
@@ -137,7 +137,7 @@ class TestChatBasics:
 
         assert chat._get_tools() is None
 
-    def test_chat_handles_connection_error(self, temp_persona_file, mock_tools):
+    async def test_chat_handles_connection_error(self, temp_persona_file, mock_tools):
         from openai import APIConnectionError
 
         class ConnectionLLM:
@@ -145,13 +145,13 @@ class TestChatBasics:
             def capabilities(self):
                 return {"tools": False}
 
-            def complete(self, **kwargs):
+            async def complete(self, **kwargs):
                 raise APIConnectionError(request=None)
 
         persona = Persona(name="Test User", persona_yaml_file=temp_persona_file)
         chat = Chat(persona=persona, llm=ConnectionLLM(), llm_model="test", llm_tools=mock_tools)
 
-        response = chat.chat("Hello", [])
+        response = await chat.chat("Hello", [])
 
         assert "trouble connecting" in response.lower()
 

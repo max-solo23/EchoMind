@@ -39,18 +39,19 @@ class OpenAICompatibleProvider(LLMProvider):
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, max=10),
         retry=retry_if_exception_type((RateLimitError, APITimeoutError, APIConnectionError)),
+        reraise=True,
         before_sleep=lambda retry_state: logger.warning(
             f"Retrying LLM call after {retry_state.attempt_number}/{3}: "
         ),
     )
-    def complete(
+    async def complete(
         self,
         *,
         model: str,
         messages: list[dict],
         tools: list[dict] | None = None,
     ) -> CompletionResponse:
-        response = self._client.chat.completions.create(
+        response = await self._async_client.chat.completions.create(
             model=model,
             messages=messages,  # type: ignore[arg-type]
             tools=tools,  # type: ignore[arg-type]
@@ -70,6 +71,7 @@ class OpenAICompatibleProvider(LLMProvider):
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, max=10),
         retry=retry_if_exception_type((RateLimitError, APITimeoutError, APIConnectionError)),
+        reraise=True,
         before_sleep=lambda retry_state: logger.warning(
             f"Retrying LLM call after {retry_state.attempt_number}/{3}: "
         ),

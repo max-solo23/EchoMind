@@ -168,22 +168,22 @@ class Chat:
         )
         messages.extend(results)
 
-    def chat(self, message: str, history: list[dict]) -> str:
+    async def chat(self, message: str, history: list[dict]) -> str:
         self._validate_message(message)
 
         messages = _build_messages(self.persona.system_prompt, history, message)
 
         try:
-            return self._run_completion_loop(messages)
+            return await self._run_completion_loop(messages)
         except Exception as error:
             user_message, _ = _handle_llm_error(error)
             return user_message
 
-    def _run_completion_loop(self, messages: list[dict]) -> str:
+    async def _run_completion_loop(self, messages: list[dict]) -> str:
         tools = self._get_tools()
 
         while True:
-            response = self.llm.complete(model=self.llm_model, messages=messages, tools=tools)
+            response = await self.llm.complete(model=self.llm_model, messages=messages, tools=tools)
 
             if response.finish_reason != "tool_calls":
                 return response.message.content or ""

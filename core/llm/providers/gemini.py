@@ -62,7 +62,7 @@ class GeminiProvider(LLMProvider):
                 texts.append(str(p["text"]))
         return "".join(texts)
 
-    def complete(
+    async def complete(
         self,
         *,
         model: str,
