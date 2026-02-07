@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
-from openai import AsyncOpenAI, OpenAI
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    AsyncOpenAI,
+    OpenAI,
+    RateLimitError,
+)
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from core.llm.provider import LLMProvider
 from core.llm.types import CompletionMessage, CompletionResponse, StreamDelta, ToolCallDelta
@@ -11,6 +19,8 @@ from core.llm.types import CompletionMessage, CompletionResponse, StreamDelta, T
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+
+logger = logging.getLogger(__name__)
 
 class OpenAICompatibleProvider(LLMProvider):
     def __init__(
@@ -25,6 +35,14 @@ class OpenAICompatibleProvider(LLMProvider):
             api_key=api_key, base_url=base_url, default_headers=default_headers
         )
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, max=10),
+        retry=retry_if_exception_type((RateLimitError, APITimeoutError, APIConnectionError)),
+        before_sleep=lambda retry_state: logger.warning(
+            f"Retrying LLM call after {retry_state.attempt_number}/{3}: "
+        ),
+    )
     def complete(
         self,
         *,
@@ -48,6 +66,14 @@ class OpenAICompatibleProvider(LLMProvider):
             ),
         )
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, max=10),
+        retry=retry_if_exception_type((RateLimitError, APITimeoutError, APIConnectionError)),
+        before_sleep=lambda retry_state: logger.warning(
+            f"Retrying LLM call after {retry_state.attempt_number}/{3}: "
+        ),
+    )
     async def stream(
         self,
         *,
@@ -61,7 +87,7 @@ class OpenAICompatibleProvider(LLMProvider):
             tools=tools,  # type: ignore[arg-type]
             stream=True,
         )
-        assert hasattr(stream, "__aiter__")  # Type guard for streaming response
+        assert hasattr(stream, "__aiter__")
 
         async for chunk in stream:
             choice = chunk.choices[0]
@@ -71,12 +97,13 @@ class OpenAICompatibleProvider(LLMProvider):
             if delta.tool_calls:
                 tool_call_deltas = []
                 for tc in delta.tool_calls:
+                    func = getattr(tc, "function", None)
                     tool_call_deltas.append(
                         ToolCallDelta(
                             index=tc.index,
                             id=getattr(tc, "id", None),
-                            name=getattr(getattr(tc, "function", None), "name", None),
-                            arguments=getattr(getattr(tc, "function", None), "arguments", None),
+                            name=getattr(func, "name", None) if func else None,
+                            arguments=getattr(func, "arguments", None) if func else None,
                         )
                     )
 
