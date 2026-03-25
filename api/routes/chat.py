@@ -98,7 +98,7 @@ async def chat_endpoint(
         logger.error(f"Chat error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process chat: {str(e)}",
+            detail="Failed to process chat request. Please try again.",
         ) from None
 
 

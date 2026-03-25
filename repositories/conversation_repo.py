@@ -1,6 +1,7 @@
+from datetime import datetime
 import json
 
-from sqlalchemy import delete, desc, func, select
+from sqlalchemy import delete, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -45,6 +46,13 @@ class SQLAlchemyConversationRepository:
         )
 
         self.session.add(conversation)
+
+        await self.session.execute(
+            update(Session)
+            .where(Session.id == session_db_id)
+            .values(last_activity=datetime.utcnow())
+        )
+
         await self.session.commit()
         await self.session.refresh(conversation)
 

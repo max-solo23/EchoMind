@@ -195,6 +195,8 @@ class Chat:
             )
 
     async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[bytes, None]:
+        self._validate_message(message)
+
         messages = _build_messages(self.persona.system_prompt, history, message)
 
         try:
@@ -207,7 +209,7 @@ class Chat:
 
         except Exception as error:
             user_message, error_code = _handle_llm_error(error, "streaming")
-            yield SSEEvent(metadata={"error": str(error), "code": error_code}).encode()
+            yield SSEEvent(metadata={"error": user_message, "code": error_code}).encode()
 
     async def _run_stream_loop(self, messages: list[dict]) -> AsyncGenerator[bytes, None]:
         tools = self._get_tools()
@@ -263,6 +265,14 @@ class Chat:
         tool_calls: list[dict],
         messages: list[dict],
     ) -> AsyncGenerator[bytes, None]:
+        messages.append(
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": tool_calls,
+            }
+        )
+
         for tc in tool_calls:
             tool_name = tc["function"]["name"]
 
@@ -274,21 +284,14 @@ class Chat:
 
                 yield SSEEvent(metadata={"tool_call": tool_name, "status": "success"}).encode()
 
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": tool_calls,
-                    }
-                )
                 messages.extend(results)
 
-            except Exception as e:
+            except Exception:
                 yield SSEEvent(
                     metadata={
                         "tool_call": tool_name,
                         "status": "failed",
-                        "error": str(e),
+                        "error": "Tool execution failed",
                     }
                 ).encode()
                 return
