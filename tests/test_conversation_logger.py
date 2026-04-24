@@ -107,6 +107,24 @@ class TestLogAndCache:
 
         mock_cache_service.cache_answer.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_cache_failure_does_not_fail_logging(
+        self, logger, mock_cache_service, mock_conversation_repo
+    ):
+        mock_conversation_repo.log_conversation.return_value = 1
+        mock_cache_service.cache_answer.side_effect = RuntimeError("cache unavailable")
+
+        result = await logger.log_and_cache(
+            session_db_id=1,
+            user_message="What is Python?",
+            bot_response="A language",
+            cache_response=True,
+        )
+
+        assert result == 1
+        mock_conversation_repo.log_conversation.assert_called_once()
+        mock_cache_service.cache_answer.assert_called_once()
+
 
 class TestDelegationMethods:
     @pytest.mark.asyncio

@@ -87,7 +87,8 @@ class CacheService:
         token_count = len(tokens)
 
         if "?" in message:
-            return False
+            question_text = normalized.strip(" ?!.,")
+            return not question_text or question_text in CACHE_DENYLIST
 
         if token_count < 2:
             return True
@@ -124,24 +125,6 @@ class CacheService:
                 await self.cache_repo.delete_cache_by_id(exact_match["id"])
             else:
                 return await self.cache_repo.get_next_variation(exact_match["id"])
-
-        all_cached = await self.cache_repo.get_all_cached_questions()
-        if not all_cached:
-            return None
-
-        valid_cached = [
-            c for c in all_cached if not c.get("expires_at") or c["expires_at"] >= datetime.utcnow()
-        ]
-
-        if not valid_cached:
-            return None
-
-        questions = [c["question"] for c in valid_cached]
-        self.similarity.fit_on_corpus(questions + [message])
-
-        best_match = self.similarity.find_best_match(message, valid_cached)
-        if best_match:
-            return await self.cache_repo.get_next_variation(best_match["id"])
 
         return None
 
@@ -181,19 +164,17 @@ class CacheService:
             context_preview=context_preview,
         )
 
-    async def should_cache(self, message: str, is_continuation: bool = False) -> bool:
+    async def should_cache(
+        self,
+        message: str,
+        is_continuation: bool = False,
+        last_assistant_message: str | None = None,
+    ) -> bool:
         if self.should_skip_cache(message, is_continuation):
             return False
 
-        all_cached = await self.cache_repo.get_all_cached_questions()
-        if not all_cached:
-            return True
-
-        questions = [c["question"] for c in all_cached]
-        self.similarity.fit_on_corpus(questions + [message])
-
-        best_match = self.similarity.find_best_match(message, all_cached)
-        return best_match is None
+        cache_key = self.build_cache_key(message, last_assistant_message)
+        return await self.cache_repo.get_cache_by_key(cache_key) is None
 
     async def clear_cache(self) -> int:
         return await self.cache_repo.clear_all_cache()

@@ -30,8 +30,10 @@ class TestShouldSkipCache:
 
     def test_questions_always_allowed(self, service):
         assert service.should_skip_cache("Why?") is False
-        assert service.should_skip_cache("?") is False
-        assert service.should_skip_cache("ok?", is_continuation=True) is False
+
+    def test_low_signal_questions_are_skipped(self, service):
+        assert service.should_skip_cache("?") is True
+        assert service.should_skip_cache("ok?", is_continuation=True) is True
 
     def test_very_short_messages_skipped(self, service):
         assert service.should_skip_cache("hi") is True
@@ -188,55 +190,32 @@ class TestGetCachedAnswer:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_returns_similar_match_when_no_exact(self, service):
+    async def test_does_not_return_similar_match_when_no_exact(self, service):
         service.cache_repo.get_cache_by_key.return_value = None
-        service.cache_repo.get_all_cached_questions.return_value = [
-            {
-                "id": 1,
-                "question": "What is Python programming?",
-                "tfidf_vector": "[0.5]",
-                "expires_at": datetime.utcnow() + timedelta(days=1),
-            }
-        ]
-        service.similarity.find_best_match.return_value = {"id": 1}
-        service.cache_repo.get_next_variation.return_value = "Similar answer"
-
-        result = await service.get_cached_answer("What is Python?")
-
-        assert result == "Similar answer"
-
-    @pytest.mark.asyncio
-    async def test_filters_expired_in_similarity_match(self, service):
-        service.cache_repo.get_cache_by_key.return_value = None
-        service.cache_repo.get_all_cached_questions.return_value = [
-            {
-                "id": 1,
-                "question": "Expired question",
-                "tfidf_vector": "[0.5]",
-                "expires_at": datetime.utcnow() - timedelta(days=1),
-            }
-        ]
 
         result = await service.get_cached_answer("What is Python?")
 
         assert result is None
+        service.cache_repo.get_all_cached_questions.assert_not_called()
+        service.similarity.find_best_match.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_no_similar_match(self, service):
+    async def test_does_not_scan_expired_candidates_after_exact_miss(self, service):
         service.cache_repo.get_cache_by_key.return_value = None
-        service.cache_repo.get_all_cached_questions.return_value = [
-            {
-                "id": 1,
-                "question": "What is Python?",
-                "tfidf_vector": "[0.5]",
-                "expires_at": datetime.utcnow() + timedelta(days=1),
-            }
-        ]
-        service.similarity.find_best_match.return_value = None
+
+        result = await service.get_cached_answer("What is Python?")
+
+        assert result is None
+        service.cache_repo.get_all_cached_questions.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_returns_none_without_fuzzy_match_after_exact_miss(self, service):
+        service.cache_repo.get_cache_by_key.return_value = None
 
         result = await service.get_cached_answer("How do I cook pasta?")
 
         assert result is None
+        service.similarity.find_best_match.assert_not_called()
 
 
 class TestShouldCache:
@@ -254,29 +233,23 @@ class TestShouldCache:
 
     @pytest.mark.asyncio
     async def test_returns_true_for_new_question(self, service):
-        service.cache_repo.get_all_cached_questions.return_value = []
+        service.cache_repo.get_cache_by_key.return_value = None
 
         result = await service.should_cache("What is Python?")
 
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_returns_false_for_similar_existing(self, service):
-        service.cache_repo.get_all_cached_questions.return_value = [
-            {"id": 1, "question": "What is Python?", "tfidf_vector": "[0.5]"}
-        ]
-        service.similarity.find_best_match.return_value = {"id": 1}
+    async def test_returns_false_for_exact_existing(self, service):
+        service.cache_repo.get_cache_by_key.return_value = {"id": 1}
 
-        result = await service.should_cache("What is Python programming?")
+        result = await service.should_cache("What is Python?")
 
         assert result is False
 
     @pytest.mark.asyncio
     async def test_returns_true_for_different_question(self, service):
-        service.cache_repo.get_all_cached_questions.return_value = [
-            {"id": 1, "question": "What is Python?", "tfidf_vector": "[0.5]"}
-        ]
-        service.similarity.find_best_match.return_value = None
+        service.cache_repo.get_cache_by_key.return_value = None
 
         result = await service.should_cache("How do I learn JavaScript?")
 

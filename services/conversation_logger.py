@@ -1,6 +1,11 @@
+import logging
+
 from repositories.conversation_repo import SQLAlchemyConversationRepository
 
 from .cache_service import CacheService
+
+
+logger = logging.getLogger(__name__)
 
 
 class ConversationLogger:
@@ -54,12 +59,15 @@ class ConversationLogger:
         )
 
         if self.enable_caching and cache_response:
-            await self.cache_service.cache_answer(
-                message=user_message,
-                answer=bot_response,
-                last_assistant_message=last_assistant_message,
-                is_continuation=is_continuation,
-            )
+            try:
+                await self.cache_service.cache_answer(
+                    message=user_message,
+                    answer=bot_response,
+                    last_assistant_message=last_assistant_message,
+                    is_continuation=is_continuation,
+                )
+            except Exception:
+                logger.exception("Failed to cache conversation response")
 
         return conversation_id
 
