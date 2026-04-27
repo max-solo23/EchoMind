@@ -78,7 +78,7 @@ class GeminiProvider(LLMProvider):
             body["system_instruction"] = system_instruction
 
         url = f"{self._base_url}/v1beta/models/{model}:generateContent"
-        resp = self._client.post(url, params={"key": self._api_key}, json=body)
+        resp = await self._async_client.post(url, params={"key": self._api_key}, json=body)
         resp.raise_for_status()
         data = resp.json()
         text = self._extract_text(data)

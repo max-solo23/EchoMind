@@ -37,6 +37,11 @@ MIN_MESSAGE_LENGTH = 2
 MIN_LETTER_RATIO = 0.3
 MESSAGE_PREVIEW_LENGTH = 50
 SSE_KICKSTART_BUFFER_SIZE = 2048
+MAX_TOOL_CALL_ROUNDS = 5
+TOOL_CALL_LIMIT_MESSAGE = (
+    "I couldn't complete that request because it required too many tool actions. "
+    "Please try a simpler question."
+)
 
 
 class InvalidMessageError(Exception):
@@ -182,7 +187,7 @@ class Chat:
     async def _run_completion_loop(self, messages: list[dict]) -> str:
         tools = self._get_tools()
 
-        while True:
+        for _ in range(MAX_TOOL_CALL_ROUNDS):
             response = await self.llm.complete(model=self.llm_model, messages=messages, tools=tools)
 
             if response.finish_reason != "tool_calls":
@@ -193,6 +198,9 @@ class Chat:
                 messages,
                 response.message.content,
             )
+
+        logger.error("Tool call round limit exceeded")
+        return TOOL_CALL_LIMIT_MESSAGE
 
     async def chat_stream(self, message: str, history: list[dict]) -> AsyncGenerator[bytes, None]:
         self._validate_message(message)
@@ -214,7 +222,7 @@ class Chat:
     async def _run_stream_loop(self, messages: list[dict]) -> AsyncGenerator[bytes, None]:
         tools = self._get_tools()
 
-        while True:
+        for _ in range(MAX_TOOL_CALL_ROUNDS):
             tool_calls_accumulator: list[dict] = []
             finish_reason: str | None = None
 
@@ -237,6 +245,11 @@ class Chat:
                 yield event
                 if b'"status": "failed"' in event:
                     return
+
+        logger.error("Streaming tool call round limit exceeded")
+        yield SSEEvent(
+            metadata={"error": TOOL_CALL_LIMIT_MESSAGE, "code": "tool_call_limit"}
+        ).encode()
 
     def _accumulate_tool_calls(
         self,

@@ -1,6 +1,7 @@
 import pytest
 
-from core.chat import Chat, InvalidMessageError, SSEEvent
+from core.chat import TOOL_CALL_LIMIT_MESSAGE, Chat, InvalidMessageError, SSEEvent
+from core.llm.types import CompletionMessage, CompletionResponse
 from core.persona import Persona
 
 
@@ -154,6 +155,47 @@ class TestChatBasics:
         response = await chat.chat("Hello", [])
 
         assert "trouble connecting" in response.lower()
+
+    async def test_chat_stops_after_tool_call_limit(self, temp_persona_file):
+        class ToolLoopLLM:
+            def __init__(self):
+                self.calls = 0
+
+            @property
+            def capabilities(self):
+                return {"tools": True}
+
+            async def complete(self, **kwargs):
+                self.calls += 1
+                return CompletionResponse(
+                    finish_reason="tool_calls",
+                    message=CompletionMessage(
+                        role="assistant",
+                        content=None,
+                        tool_calls=[
+                            {
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {"name": "test_tool", "arguments": "{}"},
+                            }
+                        ],
+                    ),
+                )
+
+        class LoopTools:
+            tools = [{"type": "function", "function": {"name": "test_tool"}}]
+
+            def handle_tool_call(self, tool_calls):
+                return [{"role": "tool", "tool_call_id": "call_1", "content": "ok"}]
+
+        llm = ToolLoopLLM()
+        persona = Persona(name="Test User", persona_yaml_file=temp_persona_file)
+        chat = Chat(persona=persona, llm=llm, llm_model="test", llm_tools=LoopTools())
+
+        response = await chat.chat("Hello", [])
+
+        assert response == TOOL_CALL_LIMIT_MESSAGE
+        assert llm.calls == 5
 
 
 class TestSSEEvent:

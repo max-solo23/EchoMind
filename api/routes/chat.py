@@ -134,8 +134,10 @@ async def _chat_with_logging(
             )
             return cached_answer
 
-        reply = await chat_service.chat(message, history)
+    reply = await chat_service.chat(message, history)
 
+    async with get_session(config) as session:
+        conversation_logger = await get_conversation_logger(session)
         session_db_id = await conversation_logger.get_or_create_session(session_id, client_ip)
         await conversation_logger.log_and_cache(
             session_db_id=session_db_id,

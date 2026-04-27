@@ -1,17 +1,22 @@
+import time
 from datetime import datetime
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import (
+    get_config,
     get_conversation_logger,
     get_db_session,
     is_database_configured,
 )
 from api.middleware.auth import verify_api_key
 from api.middleware.rate_limit_state import rate_limit_state
+from models.models import RateLimit
+from repositories.connection import get_session
 
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"], dependencies=[Depends(verify_api_key)])
@@ -174,9 +179,17 @@ class ClearSessionsResponse(BaseModel):
     deleted_count: int
 
 
+class RateLimitBucket(BaseModel):
+    ip: str
+    used: int
+    limit: int
+    ttl_seconds: int
+
+
 class RateLimitSettings(BaseModel):
     enabled: bool
     rate_per_hour: int
+    active_limits: list[RateLimitBucket] = Field(default_factory=list)
 
 
 class UpdateRateLimitRequest(BaseModel):
@@ -408,7 +421,39 @@ async def cleanup_expired_cache(session: AsyncSession = Depends(get_db_session))
 
 @router.get("/rate-limit", response_model=RateLimitSettings)
 async def get_rate_limit_settings():
-    return RateLimitSettings(**rate_limit_state.get_settings())
+    settings = rate_limit_state.get_settings()
+    return RateLimitSettings(
+        **settings,
+        active_limits=await _get_active_rate_limit_buckets(settings["rate_per_hour"]),
+    )
+
+
+async def _get_active_rate_limit_buckets(limit: int) -> list[RateLimitBucket]:
+    if not is_database_configured():
+        return []
+
+    now_timestamp = int(time.time())
+    config = get_config()
+
+    async with get_session(config) as session:
+        result = await session.execute(
+            select(RateLimit).where(RateLimit.expiry > now_timestamp).order_by(RateLimit.key)
+        )
+        buckets = result.scalars().all()
+
+    return [
+        RateLimitBucket(
+            ip=_display_rate_limit_key(bucket.key),
+            used=bucket.count,
+            limit=limit,
+            ttl_seconds=max(0, bucket.expiry - now_timestamp),
+        )
+        for bucket in buckets
+    ]
+
+
+def _display_rate_limit_key(key: str) -> str:
+    return key.removeprefix("rate_limit:")
 
 
 @router.post("/rate-limit", response_model=RateLimitSettings)

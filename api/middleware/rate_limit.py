@@ -1,8 +1,9 @@
 import logging
 import time
+from typing import cast
 
 from fastapi import HTTPException, Request
-from sqlalchemy import case, select
+from sqlalchemy import case
 from sqlalchemy.dialects.postgresql import insert
 
 from api.dependencies import get_config
@@ -44,11 +45,9 @@ async def _increment_counter(key: str) -> int:
 
     async with get_session(config) as session:
         stmt = _build_increment_statement(key, now_timestamp, expiry_timestamp)
-        await session.execute(stmt)
+        result = await session.execute(stmt)
         await session.commit()
-
-        result = await session.execute(select(RateLimit.count).where(RateLimit.key == key))
-        return result.scalar_one()
+        return cast("int", result.scalar_one())
 
 
 def _build_increment_statement(key: str, now_timestamp: int, expiry_timestamp: int):
@@ -60,7 +59,7 @@ def _build_increment_statement(key: str, now_timestamp: int, expiry_timestamp: i
             "count": case((is_expired, 1), else_=RateLimit.count + 1),
             "expiry": case((is_expired, expiry_timestamp), else_=RateLimit.expiry),
         },
-    )
+    ).returning(RateLimit.count)
 
 
 def _get_client_ip(request: Request) -> str:

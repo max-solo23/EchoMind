@@ -193,6 +193,7 @@ class TestRateLimiting:
         assert "ELSE rate_limit.count +" in compiled_sql
         assert "expiry = CASE WHEN (rate_limit.expiry <=" in compiled_sql
         assert "ELSE rate_limit.expiry END" in compiled_sql
+        assert "RETURNING rate_limit.count" in compiled_sql
         assert compiled.params["expiry_1"] == 100
         assert compiled.params["param_1"] == 1
         assert compiled.params["param_2"] == 3700
