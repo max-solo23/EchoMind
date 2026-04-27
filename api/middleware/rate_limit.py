@@ -2,7 +2,7 @@ import logging
 import time
 
 from fastapi import HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.dialects.postgresql import insert
 
 from api.dependencies import get_config
@@ -20,7 +20,7 @@ async def check_rate_limit(request: Request) -> None:
     if not rate_limit_state.enabled:
         return
 
-    ip = request.client.host if request.client else "unknown"
+    ip = _get_client_ip(request)
     key = f"rate_limit:{ip}"
 
     try:
@@ -39,16 +39,37 @@ async def check_rate_limit(request: Request) -> None:
 
 async def _increment_counter(key: str) -> int:
     config = get_config()
-    expiry_timestamp = int(time.time()) + EXPIRY_SECONDS
+    now_timestamp = int(time.time())
+    expiry_timestamp = now_timestamp + EXPIRY_SECONDS
 
     async with get_session(config) as session:
-        stmt = insert(RateLimit).values(key=key, count=1, expiry=expiry_timestamp)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["key"],
-            set_={"count": RateLimit.count + 1, "expiry": expiry_timestamp},
-        )
+        stmt = _build_increment_statement(key, now_timestamp, expiry_timestamp)
         await session.execute(stmt)
         await session.commit()
 
         result = await session.execute(select(RateLimit.count).where(RateLimit.key == key))
         return result.scalar_one()
+
+
+def _build_increment_statement(key: str, now_timestamp: int, expiry_timestamp: int):
+    stmt = insert(RateLimit).values(key=key, count=1, expiry=expiry_timestamp)
+    is_expired = RateLimit.expiry <= now_timestamp
+    return stmt.on_conflict_do_update(
+        index_elements=["key"],
+        set_={
+            "count": case((is_expired, 1), else_=RateLimit.count + 1),
+            "expiry": case((is_expired, expiry_timestamp), else_=RateLimit.expiry),
+        },
+    )
+
+
+def _get_client_ip(request: Request) -> str:
+    fly_client_ip = request.headers.get("fly-client-ip")
+    if fly_client_ip and fly_client_ip.strip():
+        return fly_client_ip.strip()
+
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for and forwarded_for.split(",", 1)[0].strip():
+        return forwarded_for.split(",", 1)[0].strip()
+
+    return request.client.host if request.client else "unknown"

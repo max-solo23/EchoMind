@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Released]
 
+## [Unreleased]
+
+### Changed
+- **Cache matching**: Disabled fuzzy cache reuse; cache hits now require exact persona/context-aware keys to avoid returning stale or unrelated answers.
+- **Cache eligibility**: Low-signal question inputs like `?` and `ok?` are skipped instead of being cached.
+
+### Fixed
+- **Chat reliability**: Cache write failures no longer fail a successfully logged chat response.
+
+---
+
 ## [2.3.1] - 2025-12-30
 
 ### Fixed
