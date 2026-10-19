@@ -250,6 +250,10 @@ alembic upgrade head
 
 # Create new migration
 alembic revision -m "description"
+
+# Latency benchmark with a zero-latency fake LLM (no database or API key needed)
+python scripts/bench_chat.py          # in-process: request overhead + event-loop lag probe
+python scripts/bench_chat.py --http   # real uvicorn over TCP: time-to-first-byte
 ```
 
 ## Deployment
