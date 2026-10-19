@@ -1,20 +1,35 @@
-import json
+from __future__ import annotations
 
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import json
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    import numpy as np
+    from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 class SimilarityService:
+    # ponytail: sklearn + scipy + pandas cost ~1.2 s to import and are only needed when a vector is
+    # computed (cache write, after the reply is already sent), so they load on first use, not at startup.
+
     def __init__(self, threshold: float = 0.80):
         self.threshold = threshold
-        self.vectorizer = TfidfVectorizer(
-            lowercase=True,
-            stop_words="english",
-            ngram_range=(1, 2),
-            max_features=1000,
-        )
+        self._vectorizer: TfidfVectorizer | None = None
         self._is_fitted = False
+
+    @property
+    def vectorizer(self) -> TfidfVectorizer:
+        if self._vectorizer is None:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+
+            self._vectorizer = TfidfVectorizer(
+                lowercase=True,
+                stop_words="english",
+                ngram_range=(1, 2),
+                max_features=1000,
+            )
+        return self._vectorizer
 
     def vectorize(self, question: str) -> str:
         if not self._is_fitted:
@@ -27,9 +42,14 @@ class SimilarityService:
         return json.dumps(vector_array)
 
     def deserialize_vector(self, vector_json: str) -> np.ndarray:
+        import numpy as np
+
         return np.array(json.loads(vector_json))
 
     def calculate_similarity(self, vector1: np.ndarray, vector2: np.ndarray) -> float:
+        import numpy as np
+        from sklearn.metrics.pairwise import cosine_similarity
+
         max_len = max(len(vector1), len(vector2))
         v1 = np.pad(vector1, (0, max_len - len(vector1)))
         v2 = np.pad(vector2, (0, max_len - len(vector2)))

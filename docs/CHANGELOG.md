@@ -12,10 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Chat response flow**: Consolidated cache-write and response logging paths while preserving non-streaming responses and the SSE event contract.
+- **Cache repository mapping**: Consolidated repeated cache-record mapping while retaining each public method's existing fields and query behavior.
 - **Cache matching**: Disabled fuzzy cache reuse; cache hits now require exact persona/context-aware keys to avoid returning stale or unrelated answers.
 - **Cache eligibility**: Low-signal question inputs like `?` and `ok?` are skipped instead of being cached.
+- **Streaming first byte**: the SSE kickstart now leaves before the cache lookup, so the client's EventSource opens immediately instead of after a database round trip (local benchmark with a simulated 20 ms database: time-to-first-byte 31 ms -> 1.8 ms).
+- **Conversation logging off the critical path**: cache and conversation writes run as a background task after the reply is delivered and are drained on shutdown; a failed write is logged instead of turning an already generated reply into a 500 (reply latency with a simulated database: 62 ms -> 31 ms).
+- **Faster cold start**: scikit-learn, scipy and pandas load on the first cache write instead of at import, cutting `import api.main` from 1.94 s to 1.07 s. Matters on Fly with `min_machines_running = 0`.
 
 ### Fixed
+- **Tool calls blocked the event loop**: the synchronous Pushover notification inside a tool call stalled every other request for the duration of the HTTP call (measured 298 ms event-loop lag). Tool handlers now run in a worker thread via `asyncio.to_thread` (lag 11 ms, the timer floor).
 - **Chat reliability**: Cache write failures no longer fail a successfully logged chat response.
 
 ---

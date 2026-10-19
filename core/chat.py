@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import re
@@ -36,7 +37,6 @@ logger = logging.getLogger(__name__)
 MIN_MESSAGE_LENGTH = 2
 MIN_LETTER_RATIO = 0.3
 MESSAGE_PREVIEW_LENGTH = 50
-SSE_KICKSTART_BUFFER_SIZE = 2048
 MAX_TOOL_CALL_ROUNDS = 5
 TOOL_CALL_LIMIT_MESSAGE = (
     "I couldn't complete that request because it required too many tool actions. "
@@ -161,13 +161,14 @@ class Chat:
                 "Please send a clear question or message."
             )
 
-    def _process_tool_calls(
+    async def _process_tool_calls(
         self,
         tool_calls,
         messages: list[dict],
         assistant_content: str | None,
     ) -> None:
-        results = self.llm_tools.handle_tool_call(tool_calls)
+        # Tool handlers are synchronous (PushOver uses requests); a worker thread keeps the loop free.
+        results = await asyncio.to_thread(self.llm_tools.handle_tool_call, tool_calls)
         messages.append(
             {"role": "assistant", "content": assistant_content, "tool_calls": tool_calls}
         )
@@ -193,7 +194,7 @@ class Chat:
             if response.finish_reason != "tool_calls":
                 return response.message.content or ""
 
-            self._process_tool_calls(
+            await self._process_tool_calls(
                 response.message.tool_calls,
                 messages,
                 response.message.content,
@@ -208,8 +209,6 @@ class Chat:
         messages = _build_messages(self.persona.system_prompt, history, message)
 
         try:
-            yield (":" + (" " * SSE_KICKSTART_BUFFER_SIZE) + "\n\n").encode("utf-8")
-
             async for event in self._run_stream_loop(messages):
                 yield event
 
@@ -293,7 +292,7 @@ class Chat:
 
             try:
                 tool_call_obj = _create_tool_call_object(tc)
-                results = self.llm_tools.handle_tool_call([tool_call_obj])
+                results = await asyncio.to_thread(self.llm_tools.handle_tool_call, [tool_call_obj])
 
                 yield SSEEvent(metadata={"tool_call": tool_name, "status": "success"}).encode()
 

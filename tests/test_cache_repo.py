@@ -40,6 +40,7 @@ class MockCachedAnswer:
 @pytest.fixture
 def mock_session():
     session = AsyncMock()
+    session.add = MagicMock()  # session.add is synchronous in SQLAlchemy
     return session
 
 
@@ -367,3 +368,88 @@ class TestSearchCache:
 
         assert len(result) == 1
         assert result[0]["question"] == "Python question"
+
+
+class TestCacheEntryShapes:
+    @pytest.mark.asyncio
+    async def test_preserves_all_public_mapping_shapes(self, repo, mock_session):
+        cache = MockCachedAnswer()
+        single_result = MagicMock()
+        single_result.scalar_one_or_none.return_value = cache
+        list_result = MagicMock()
+        list_result.scalars.return_value.all.return_value = [cache]
+        count_result = MagicMock()
+        count_result.scalar.return_value = 1
+
+        mock_session.execute.side_effect = [
+            single_result,
+            single_result,
+            list_result,
+            count_result,
+            list_result,
+            single_result,
+            list_result,
+        ]
+
+        by_key = await repo.get_cache_by_key(cache.cache_key)
+        by_question = await repo.get_cache_by_question(cache.question)
+        all_questions = await repo.get_all_cached_questions()
+        listed = await repo.list_cache_entries()
+        by_id = await repo.get_cache_by_id(cache.id)
+        searched = await repo.search_cache(cache.question)
+
+        full_detail_fields = {
+            "id",
+            "cache_key",
+            "question",
+            "context_preview",
+            "tfidf_vector",
+            "variations",
+            "variation_index",
+            "cache_type",
+            "expires_at",
+            "hit_count",
+            "created_at",
+            "last_used",
+        }
+        assert by_key is not None and set(by_key) == full_detail_fields
+        assert by_id is not None and set(by_id) == full_detail_fields
+        assert set(by_question) == full_detail_fields - {"created_at", "last_used"}
+        assert set(all_questions[0]) == {
+            "id",
+            "cache_key",
+            "question",
+            "tfidf_vector",
+            "variations",
+            "variation_index",
+            "cache_type",
+            "expires_at",
+        }
+        assert set(listed["entries"][0]) == full_detail_fields - {"tfidf_vector"}
+        assert set(searched[0]) == {
+            "id",
+            "cache_key",
+            "question",
+            "context_preview",
+            "cache_type",
+            "expires_at",
+            "hit_count",
+            "last_used",
+        }
+
+
+class TestListCacheEntriesSorting:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("order", ["asc", "desc"])
+    async def test_applies_sort_direction_with_nulls_last(self, repo, mock_session, order):
+        count_result = MagicMock()
+        count_result.scalar.return_value = 0
+        entries_result = MagicMock()
+        entries_result.scalars.return_value.all.return_value = []
+        mock_session.execute.side_effect = [count_result, entries_result]
+
+        await repo.list_cache_entries(sort_by="hit_count", order=order)
+
+        query = str(mock_session.execute.await_args_list[1].args[0])
+        assert "NULLS LAST" in query
+        assert ("DESC" in query) is (order == "desc")

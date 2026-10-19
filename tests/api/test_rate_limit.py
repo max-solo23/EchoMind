@@ -1,54 +1,11 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
-from api.main import app
 from api.middleware.rate_limit import _build_increment_statement
 from api.middleware.rate_limit_state import rate_limit_state
-
-
-@pytest.fixture
-def client(monkeypatch):
-    monkeypatch.setenv("API_KEY", "test-api-key")
-    monkeypatch.setenv("ALLOWED_ORIGINS", "http://localhost:3000")
-    monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("LLM_API_KEY", "test-key-123")
-    monkeypatch.setenv("LLM_MODEL", "gpt-4")
-
-    from config import Config
-
-    test_config = Config(
-        llm_provider="openai",
-        llm_api_key="test-key-123",
-        llm_model="gpt-4",
-        llm_base_url=None,
-        persona_name="Test",
-        persona_file="persona.yaml",
-        pushover_token=None,
-        pushover_user=None,
-        api_key="test-api-key",
-        allowed_origins=["http://localhost:3000"],
-        rate_limit_per_hour=15,
-    )
-
-    with (
-        patch("api.dependencies.get_config", return_value=test_config),
-        patch("api.main.get_config", return_value=test_config),
-        patch("api.middleware.auth.get_config", return_value=test_config),
-        patch("api.middleware.rate_limit.get_config", return_value=test_config),
-    ):
-        yield TestClient(app)
-
-
-@pytest.fixture
-def mock_chat_service():
-    with patch("api.dependencies.get_chat_service") as mock:
-        service = AsyncMock()
-        service.chat.return_value = "Test response"
-        mock.return_value = service
-        yield service
 
 
 @pytest.fixture(autouse=True)

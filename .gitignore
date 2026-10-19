@@ -23,3 +23,7 @@ htmlcov
 tmpclaude*
 .understand-anything
 repomix-output.xml
+
+# agent search indices
+.codegraph/
+.tgrep/

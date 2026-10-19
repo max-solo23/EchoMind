@@ -8,10 +8,56 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.models import CachedAnswer
 
 
+FULL_CACHE_FIELDS = (
+    "id",
+    "cache_key",
+    "question",
+    "context_preview",
+    "tfidf_vector",
+    "variations",
+    "variation_index",
+    "cache_type",
+    "expires_at",
+    "hit_count",
+    "created_at",
+    "last_used",
+)
+QUESTION_CACHE_FIELDS = FULL_CACHE_FIELDS[:-2]
+ALL_QUESTIONS_CACHE_FIELDS = (
+    "id",
+    "cache_key",
+    "question",
+    "tfidf_vector",
+    "variations",
+    "variation_index",
+    "cache_type",
+    "expires_at",
+)
+LIST_ENTRY_CACHE_FIELDS = tuple(
+    field for field in FULL_CACHE_FIELDS if field != "tfidf_vector"
+)
+SEARCH_CACHE_FIELDS = (
+    "id",
+    "cache_key",
+    "question",
+    "context_preview",
+    "cache_type",
+    "expires_at",
+    "hit_count",
+    "last_used",
+)
+
+
 class SQLAlchemyCacheRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    @staticmethod
+    def _cache_to_dict(cache: CachedAnswer, fields: tuple[str, ...]) -> dict:
+        return {
+            field: json.loads(cache.variations) if field == "variations" else getattr(cache, field)
+            for field in fields
+        }
     async def get_cache_by_key(self, cache_key: str) -> dict | None:
         result = await self.session.execute(
             select(CachedAnswer).where(CachedAnswer.cache_key == cache_key)
@@ -21,20 +67,7 @@ class SQLAlchemyCacheRepository:
         if not cache:
             return None
 
-        return {
-            "id": cache.id,
-            "cache_key": cache.cache_key,
-            "question": cache.question,
-            "context_preview": cache.context_preview,
-            "tfidf_vector": cache.tfidf_vector,
-            "variations": json.loads(cache.variations),
-            "variation_index": cache.variation_index,
-            "cache_type": cache.cache_type,
-            "expires_at": cache.expires_at,
-            "hit_count": cache.hit_count,
-            "created_at": cache.created_at,
-            "last_used": cache.last_used,
-        }
+        return self._cache_to_dict(cache, FULL_CACHE_FIELDS)
 
     async def get_cache_by_question(self, question: str) -> dict | None:
         result = await self.session.execute(
@@ -45,36 +78,13 @@ class SQLAlchemyCacheRepository:
         if not cache:
             return None
 
-        return {
-            "id": cache.id,
-            "cache_key": cache.cache_key,
-            "question": cache.question,
-            "context_preview": cache.context_preview,
-            "tfidf_vector": cache.tfidf_vector,
-            "variations": json.loads(cache.variations),
-            "variation_index": cache.variation_index,
-            "cache_type": cache.cache_type,
-            "expires_at": cache.expires_at,
-            "hit_count": cache.hit_count,
-        }
+        return self._cache_to_dict(cache, QUESTION_CACHE_FIELDS)
 
     async def get_all_cached_questions(self) -> list[dict]:
         result = await self.session.execute(select(CachedAnswer))
         caches = result.scalars().all()
 
-        return [
-            {
-                "id": cache.id,
-                "cache_key": cache.cache_key,
-                "question": cache.question,
-                "tfidf_vector": cache.tfidf_vector,
-                "variations": json.loads(cache.variations),
-                "variation_index": cache.variation_index,
-                "cache_type": cache.cache_type,
-                "expires_at": cache.expires_at,
-            }
-            for cache in caches
-        ]
+        return [self._cache_to_dict(cache, ALL_QUESTIONS_CACHE_FIELDS) for cache in caches]
 
     async def create_cache(
         self,
@@ -187,20 +197,8 @@ class SQLAlchemyCacheRepository:
 
         return {
             "entries": [
-                {
-                    "id": c.id,
-                    "cache_key": c.cache_key,
-                    "question": c.question,
-                    "context_preview": c.context_preview,
-                    "variations": json.loads(c.variations),
-                    "variation_index": c.variation_index,
-                    "cache_type": c.cache_type,
-                    "expires_at": c.expires_at,
-                    "hit_count": c.hit_count,
-                    "created_at": c.created_at,
-                    "last_used": c.last_used,
-                }
-                for c in caches
+                self._cache_to_dict(cache, LIST_ENTRY_CACHE_FIELDS)
+                for cache in caches
             ],
             "total": total,
             "page": page,
@@ -215,20 +213,7 @@ class SQLAlchemyCacheRepository:
         if not cache:
             return None
 
-        return {
-            "id": cache.id,
-            "cache_key": cache.cache_key,
-            "question": cache.question,
-            "context_preview": cache.context_preview,
-            "tfidf_vector": cache.tfidf_vector,
-            "variations": json.loads(cache.variations),
-            "variation_index": cache.variation_index,
-            "cache_type": cache.cache_type,
-            "expires_at": cache.expires_at,
-            "hit_count": cache.hit_count,
-            "created_at": cache.created_at,
-            "last_used": cache.last_used,
-        }
+        return self._cache_to_dict(cache, FULL_CACHE_FIELDS)
 
     async def delete_cache_by_id(self, cache_id: int) -> bool:
         result = cast(
@@ -261,16 +246,4 @@ class SQLAlchemyCacheRepository:
         )
         caches = result.scalars().all()
 
-        return [
-            {
-                "id": c.id,
-                "cache_key": c.cache_key,
-                "question": c.question,
-                "context_preview": c.context_preview,
-                "cache_type": c.cache_type,
-                "expires_at": c.expires_at,
-                "hit_count": c.hit_count,
-                "last_used": c.last_used,
-            }
-            for c in caches
-        ]
+        return [self._cache_to_dict(cache, SEARCH_CACHE_FIELDS) for cache in caches]

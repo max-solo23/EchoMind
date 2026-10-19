@@ -17,6 +17,7 @@ async def lifespan(app: FastAPI):
         enabled=config.rate_limit_enabled, rate_per_hour=config.rate_limit_per_hour
     )
     yield
+    await chat.drain_background_tasks()
     await close_database()
 
 

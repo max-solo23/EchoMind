@@ -50,6 +50,7 @@ class MockConversation:
 @pytest.fixture
 def mock_db_session():
     session = AsyncMock()
+    session.add = MagicMock()  # session.add is synchronous in SQLAlchemy
     return session
 
 
@@ -294,3 +295,29 @@ class TestClearAllSessions:
         await repo.clear_all_sessions()
 
         assert mock_db_session.execute.call_count == 3
+
+
+class TestListSessionsSorting:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("sort_by", "order"),
+        [
+            ("created_at", "desc"),
+            ("created_at", "asc"),
+            ("last_activity", "asc"),
+            ("bogus", "desc"),
+        ],
+    )
+    async def test_applies_sort_direction(self, repo, mock_db_session, sort_by, order):
+        count_result = MagicMock()
+        count_result.scalar.return_value = 1
+        sessions_result = MagicMock()
+        sessions_result.scalars.return_value.all.return_value = [MockSession()]
+        mock_db_session.execute.side_effect = [count_result, sessions_result]
+
+        result = await repo.list_sessions(sort_by=sort_by, order=order)
+
+        assert result["total"] == 1
+        query = str(mock_db_session.execute.await_args_list[1].args[0])
+        assert "ORDER BY" in query
+        assert ("DESC" in query) is (order == "desc")
