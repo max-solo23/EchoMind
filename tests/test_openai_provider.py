@@ -119,3 +119,36 @@ def test_parse_delegates_to_sync_client(provider):
 
 def test_capabilities(provider):
     assert provider.capabilities == {"tools": True, "streaming": True, "structured_output": True}
+
+
+async def test_reasoning_effort_is_sent_only_when_configured():
+    calls = []
+    for effort in (None, "low"):
+        p = OpenAICompatibleProvider(api_key="k", reasoning_effort=effort)
+        create = AsyncMock(return_value=_completion())
+        p._async_client.chat.completions.create = create  # type: ignore[method-assign]
+        await p.complete(model="m", messages=[])
+        calls.append(create.call_args.kwargs["extra_body"])
+
+    assert calls == [None, {"reasoning_effort": "low"}]
+
+
+async def test_stream_skips_usage_only_chunk_and_logs_usage(provider, caplog):
+    usage = SimpleNamespace(
+        prompt_tokens=3800,
+        completion_tokens=60,
+        prompt_tokens_details=SimpleNamespace(cached_tokens=3584, cache_write_tokens=0),
+        completion_tokens_details=SimpleNamespace(reasoning_tokens=12),
+    )
+    create = AsyncMock(
+        return_value=FakeStream([_chunk(content="Hi", finish_reason="stop"),
+                                 SimpleNamespace(choices=[], usage=usage)])
+    )
+    provider._async_client.chat.completions.create = create
+
+    with caplog.at_level("INFO"):
+        deltas = [d async for d in provider.stream(model="m", messages=[])]
+
+    assert [d.content for d in deltas] == ["Hi"]
+    assert create.call_args.kwargs["stream_options"] == {"include_usage": True}
+    assert "prompt=3800 cached=3584 cache_write=0 completion=60 reasoning=12" in caplog.text

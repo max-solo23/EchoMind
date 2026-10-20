@@ -19,8 +19,13 @@ from core.llm.types import CompletionMessage, CompletionResponse, StreamDelta, T
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from openai.types.chat import ChatCompletionStreamOptionsParam
+
 
 logger = logging.getLogger(__name__)
+
+INCLUDE_USAGE: ChatCompletionStreamOptionsParam = {"include_usage": True}
+
 
 class OpenAICompatibleProvider(LLMProvider):
     def __init__(
@@ -29,10 +34,32 @@ class OpenAICompatibleProvider(LLMProvider):
         api_key: str,
         base_url: str | None = None,
         default_headers: dict[str, str] | None = None,
+        reasoning_effort: str | None = None,
     ) -> None:
         self._client = OpenAI(api_key=api_key, base_url=base_url, default_headers=default_headers)
         self._async_client = AsyncOpenAI(
             api_key=api_key, base_url=base_url, default_headers=default_headers
+        )
+        # Sent only when configured: OpenAI-compatible providers without reasoning reject it.
+        # extra_body because SDK 2.4 types lack newer values such as "none" and "max".
+        self._extra_body: dict[str, Any] | None = (
+            {"reasoning_effort": reasoning_effort} if reasoning_effort else None
+        )
+
+    @staticmethod
+    def _log_usage(model: str, usage: Any) -> None:
+        if usage is None:
+            return
+        prompt_details = getattr(usage, "prompt_tokens_details", None)
+        completion_details = getattr(usage, "completion_tokens_details", None)
+        logger.info(
+            "LLM usage model=%s prompt=%s cached=%s cache_write=%s completion=%s reasoning=%s",
+            model,
+            usage.prompt_tokens,
+            getattr(prompt_details, "cached_tokens", None),
+            getattr(prompt_details, "cache_write_tokens", None),
+            usage.completion_tokens,
+            getattr(completion_details, "reasoning_tokens", None),
         )
 
     @retry(
@@ -55,7 +82,9 @@ class OpenAICompatibleProvider(LLMProvider):
             model=model,
             messages=messages,  # type: ignore[arg-type]
             tools=tools,  # type: ignore[arg-type]
+            extra_body=self._extra_body,
         )
+        self._log_usage(model, getattr(response, "usage", None))
         choice = response.choices[0]
         msg = choice.message
         return CompletionResponse(
@@ -88,10 +117,16 @@ class OpenAICompatibleProvider(LLMProvider):
             messages=messages,  # type: ignore[arg-type]
             tools=tools,  # type: ignore[arg-type]
             stream=True,
+            stream_options=INCLUDE_USAGE,
+            extra_body=self._extra_body,
         )
         assert hasattr(stream, "__aiter__")
 
         async for chunk in stream:
+            # With include_usage the last chunk carries usage and no choices.
+            if not chunk.choices:
+                self._log_usage(model, getattr(chunk, "usage", None))
+                continue
             choice = chunk.choices[0]
             delta = choice.delta
 

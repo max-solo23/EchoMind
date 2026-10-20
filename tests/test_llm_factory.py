@@ -12,10 +12,13 @@ class TestCreateLLMProvider:
         mock_config.llm_provider = "openai"
         mock_config.llm_api_key = "test_key"
         mock_config.llm_base_url = None
+        mock_config.llm_reasoning_effort = "low"
 
         create_llm_provider(mock_config)
 
-        mock_provider_class.assert_called_once_with(api_key="test_key", base_url=None)
+        mock_provider_class.assert_called_once_with(
+            api_key="test_key", base_url=None, reasoning_effort="low"
+        )
 
     @patch("core.llm.factory.OpenAICompatibleProvider")
     def test_creates_openai_compatible_provider(self, mock_provider_class):

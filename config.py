@@ -22,6 +22,7 @@ class Config:
     db_pool_size: int = 10
     db_max_overflow: int = 10
     db_echo: bool = False
+    llm_reasoning_effort: str | None = None
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -63,4 +64,5 @@ class Config:
             db_pool_size=db_pool_size,
             db_max_overflow=db_max_overflow,
             db_echo=db_echo,
+            llm_reasoning_effort=os.getenv("LLM_REASONING_EFFORT") or None,
         )

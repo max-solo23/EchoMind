@@ -17,6 +17,7 @@ def create_llm_provider(config) -> LLMProvider:
         return OpenAICompatibleProvider(
             api_key=config.llm_api_key,
             base_url=config.llm_base_url,
+            reasoning_effort=getattr(config, "llm_reasoning_effort", None),
         )
 
     if provider in {"gemini"}:
