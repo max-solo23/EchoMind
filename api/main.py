@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,6 +9,12 @@ from api.middleware.cors import setup_cors
 from api.middleware.rate_limit_state import rate_limit_state
 from api.routes import admin, chat, health
 from repositories.connection import close_database
+
+
+# uvicorn configures only its own loggers; without this, app INFO lines (LLM usage, cache hits)
+# never reach the Fly logs.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per OpenAI request is noise
 
 
 @asynccontextmanager
