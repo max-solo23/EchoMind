@@ -8,15 +8,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import (
+    get_app_settings,
     get_config,
     get_conversation_logger,
     get_db_session,
     is_database_configured,
+    refresh_app_settings,
 )
 from api.middleware.auth import verify_api_key
 from api.middleware.rate_limit_state import rate_limit_state
 from models.models import RateLimit
 from repositories.connection import get_session
+from services.app_settings import REASONING_EFFORTS
 
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"], dependencies=[Depends(verify_api_key)])
@@ -467,3 +470,42 @@ async def update_rate_limit_settings(request: UpdateRateLimitRequest):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid request data"
         ) from None
+
+
+class AppSettingsResponse(BaseModel):
+    model: str
+    reasoning_effort: str
+    reasoning_efforts: list[str]
+    cache_enabled: bool
+
+
+class UpdateAppSettingsRequest(BaseModel):
+    reasoning_effort: str | None = None
+    cache_enabled: bool | None = None
+
+
+def _app_settings_response() -> AppSettingsResponse:
+    return AppSettingsResponse(
+        model=get_config().llm_model,
+        reasoning_efforts=list(REASONING_EFFORTS),
+        **get_app_settings().snapshot(),
+    )
+
+
+@router.get("/settings", response_model=AppSettingsResponse)
+async def get_app_settings_endpoint():
+    await refresh_app_settings()
+    return _app_settings_response()
+
+
+@router.put(
+    "/settings", response_model=AppSettingsResponse, dependencies=[Depends(require_database)]
+)
+async def update_app_settings(
+    request: UpdateAppSettingsRequest, session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        await get_app_settings().update(session, request.model_dump(exclude_none=True))
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from None
+    return _app_settings_response()

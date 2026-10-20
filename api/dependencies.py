@@ -10,6 +10,7 @@ from core.persona import Persona
 from repositories.cache_repo import SQLAlchemyCacheRepository
 from repositories.connection import get_session
 from repositories.conversation_repo import SQLAlchemyConversationRepository
+from services.app_settings import AppSettings
 from services.cache_service import CacheService
 from services.conversation_logger import ConversationLogger
 from services.push_over import PushOver
@@ -27,9 +28,24 @@ def get_persona() -> Persona:
     return Persona(config.persona_name, config.persona_file)
 
 @lru_cache
+def get_app_settings() -> AppSettings:
+    return AppSettings(reasoning_effort=get_config().llm_reasoning_effort or "none")
+
+
+async def refresh_app_settings() -> None:
+    """Reload admin settings from the database at most once per TTL; a no-op otherwise."""
+    settings = get_app_settings()
+    if is_database_configured() and settings.is_stale():
+        async with get_session(get_config()) as session:
+            await settings.load(session)
+
+
+@lru_cache
 def get_chat_service() -> Chat:
     config = get_config()
-    llm_provider = create_llm_provider(config)
+    llm_provider = create_llm_provider(
+        config, reasoning_effort=lambda: get_app_settings().reasoning_effort
+    )
 
     if not llm_provider.capabilities.get("tools", False):
         print(
@@ -67,7 +83,9 @@ async def get_conversation_logger(session: AsyncSession) -> ConversationLogger:
     cache_service = CacheService(cache_repo, similarity_service, persona_hash)
 
     return ConversationLogger(
-        conversation_repo=conversation_repo, cache_service=cache_service, enable_caching=True
+        conversation_repo=conversation_repo,
+        cache_service=cache_service,
+        enable_caching=get_app_settings().cache_enabled,
     )
 
 

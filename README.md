@@ -51,6 +51,9 @@ LLM_PROVIDER=openai          # openai, gemini, or openai-compatible
 LLM_API_KEY=your-api-key
 LLM_MODEL=gpt-5.2            # or gpt-5-mini, gpt-5-nano
 
+# Optional - default reasoning effort (none..max); the admin panel overrides it at runtime
+LLM_REASONING_EFFORT=none
+
 # Optional - OpenAI-compatible providers
 LLM_BASE_URL=https://api.deepseek.com/v1
 

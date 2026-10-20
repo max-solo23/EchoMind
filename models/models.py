@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -73,3 +74,15 @@ class RateLimit(Base):
     key: Mapped[str] = mapped_column(String(500), primary_key=True)
     count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     expiry: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class AppSetting(Base):
+    """Runtime settings changed from the admin panel, shared by every machine."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[Any] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )

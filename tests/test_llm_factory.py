@@ -6,8 +6,8 @@ from core.llm.factory import create_llm_provider
 
 
 class TestCreateLLMProvider:
-    @patch("core.llm.factory.OpenAICompatibleProvider")
-    def test_creates_openai_provider(self, mock_provider_class):
+    @patch("core.llm.factory.OpenAIResponsesProvider")
+    def test_openai_without_base_url_uses_responses_api(self, mock_provider_class):
         mock_config = MagicMock()
         mock_config.llm_provider = "openai"
         mock_config.llm_api_key = "test_key"
@@ -16,8 +16,33 @@ class TestCreateLLMProvider:
 
         create_llm_provider(mock_config)
 
+        kwargs = mock_provider_class.call_args.kwargs
+        assert kwargs["api_key"] == "test_key"
+        assert kwargs["reasoning_effort"]() == "low"
+
+    @patch("core.llm.factory.OpenAIResponsesProvider")
+    def test_reasoning_effort_source_overrides_env(self, mock_provider_class):
+        mock_config = MagicMock()
+        mock_config.llm_provider = "openai"
+        mock_config.llm_base_url = None
+        mock_config.llm_reasoning_effort = "low"
+
+        create_llm_provider(mock_config, reasoning_effort=lambda: "high")
+
+        assert mock_provider_class.call_args.kwargs["reasoning_effort"]() == "high"
+
+    @patch("core.llm.factory.OpenAICompatibleProvider")
+    def test_openai_with_base_url_stays_on_chat_completions(self, mock_provider_class):
+        mock_config = MagicMock()
+        mock_config.llm_provider = "openai"
+        mock_config.llm_api_key = "test_key"
+        mock_config.llm_base_url = "https://api.deepseek.com"
+        mock_config.llm_reasoning_effort = "low"
+
+        create_llm_provider(mock_config)
+
         mock_provider_class.assert_called_once_with(
-            api_key="test_key", base_url=None, reasoning_effort="low"
+            api_key="test_key", base_url="https://api.deepseek.com", reasoning_effort="low"
         )
 
     @patch("core.llm.factory.OpenAICompatibleProvider")
@@ -52,7 +77,7 @@ class TestCreateLLMProvider:
         assert "Unsupported LLM_PROVIDER" in str(exc_info.value)
         assert "unsupported_provider" in str(exc_info.value)
 
-    @patch("core.llm.factory.OpenAICompatibleProvider")
+    @patch("core.llm.factory.OpenAIResponsesProvider")
     def test_handles_none_provider_defaults_to_openai(self, mock_provider_class):
         mock_config = MagicMock()
         mock_config.llm_provider = None

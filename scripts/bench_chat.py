@@ -103,8 +103,12 @@ def make_chat(llm) -> Chat:
     return Chat(Persona("Max", CONFIG.persona_file), llm, "bench", Tools(SlowNotifier()))
 
 
+# A cache miss costs pre-ping, BEGIN, SELECT and ROLLBACK (counted on the real route, 2026-10-20).
+CACHE_LOOKUP_ROUND_TRIPS = 4
+
+
 async def fake_db_lookup(*args, **kwargs):
-    await asyncio.sleep(DB_ROUND_TRIP)
+    await asyncio.sleep(DB_ROUND_TRIP * CACHE_LOOKUP_ROUND_TRIPS)
     return None
 
 
@@ -206,7 +210,7 @@ async def loop_lag_probe(duration: float):
 
 async def run_inprocess():
     """httpx ASGITransport buffers whole responses, so TTFB here equals total; use --http for TTFB."""
-    from api.dependencies import get_chat_service
+    from api.dependencies import get_app_settings, get_chat_service
     from api.routes import chat as chat_routes
 
     app = configure_app(simulate_db=False)
@@ -225,9 +229,15 @@ async def run_inprocess():
             patch.object(chat_routes, "_get_cached_answer", fake_db_lookup),
             patch.object(chat_routes, "_persist_reply", fake_db_write),
         ):
-            db_title = f"simulated database ({DB_ROUND_TRIP * 1000:.0f} ms per round trip)"
-            await measure(c, db_title, concurrency_levels=(1,), samples=50)
-            await chat_routes.drain_background_tasks()
+            settings = get_app_settings()
+            for cache_enabled in (False, True):
+                settings._values["cache_enabled"] = cache_enabled
+                db_title = (
+                    f"simulated database ({DB_ROUND_TRIP * 1000:.0f} ms per round trip), "
+                    f"answer cache {'on' if cache_enabled else 'off'}"
+                )
+                await measure(c, db_title, concurrency_levels=(1,), samples=50)
+                await chat_routes.drain_background_tasks()
 
         print(
             f"-- event loop while one stream runs a tool that blocks {NOTIFIER_BLOCK_SECONDS:.1f} s --"

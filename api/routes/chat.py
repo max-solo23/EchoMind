@@ -10,10 +10,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from fastapi.responses import StreamingResponse
 
 from api.dependencies import (
+    get_app_settings,
     get_chat_service,
     get_config,
     get_conversation_logger,
     is_database_configured,
+    refresh_app_settings,
 )
 from api.middleware.auth import verify_api_key
 from api.middleware.rate_limit import check_rate_limit
@@ -123,7 +125,8 @@ async def _chat_with_logging(chat_service: Chat, turn: _Turn) -> str:
     if not is_database_configured():
         return await chat_service.chat(turn.message, turn.history)
 
-    cached_answer = await _get_cached_answer(turn)
+    await refresh_app_settings()
+    cached_answer = await _get_cached_answer(turn) if get_app_settings().cache_enabled else None
     if cached_answer:
         logger.info(f"Cache hit for session {turn.session_id}")
         return cached_answer
@@ -142,7 +145,8 @@ async def _stream_with_logging(chat_service: Chat, turn: _Turn) -> AsyncGenerato
             yield chunk
         return
 
-    cached_answer = await _get_cached_answer(turn)
+    await refresh_app_settings()
+    cached_answer = await _get_cached_answer(turn) if get_app_settings().cache_enabled else None
     if cached_answer:
         logger.info(f"Cache hit (streaming) for session {turn.session_id}")
         for i in range(0, len(cached_answer), STREAMING_CHUNK_SIZE):

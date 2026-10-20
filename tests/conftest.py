@@ -5,6 +5,23 @@ import pytest
 
 from config import Config
 from core.llm.types import CompletionMessage, CompletionResponse
+from services.app_settings import AppSettings
+
+
+@pytest.fixture(autouse=True)
+def app_settings(monkeypatch):
+    """Isolated admin settings with the cache on, and no database reads to refresh them."""
+    settings = AppSettings(reasoning_effort="none", cache_enabled=True)
+
+    async def no_refresh():
+        return None
+
+    monkeypatch.setattr("api.dependencies.get_app_settings", lambda: settings)
+    monkeypatch.setattr("api.routes.chat.get_app_settings", lambda: settings)
+    monkeypatch.setattr("api.routes.chat.refresh_app_settings", no_refresh)
+    monkeypatch.setattr("api.routes.admin.get_app_settings", lambda: settings)
+    monkeypatch.setattr("api.routes.admin.refresh_app_settings", no_refresh)
+    return settings
 
 
 @pytest.fixture
