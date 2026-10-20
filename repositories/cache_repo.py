@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import cast
 
-from sqlalchemy import CursorResult, delete, desc, func, select
+from sqlalchemy import CursorResult, delete, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.models import CachedAnswer
@@ -13,7 +13,6 @@ FULL_CACHE_FIELDS = (
     "cache_key",
     "question",
     "context_preview",
-    "tfidf_vector",
     "variations",
     "variation_index",
     "cache_type",
@@ -27,15 +26,12 @@ ALL_QUESTIONS_CACHE_FIELDS = (
     "id",
     "cache_key",
     "question",
-    "tfidf_vector",
     "variations",
     "variation_index",
     "cache_type",
     "expires_at",
 )
-LIST_ENTRY_CACHE_FIELDS = tuple(
-    field for field in FULL_CACHE_FIELDS if field != "tfidf_vector"
-)
+LIST_ENTRY_CACHE_FIELDS = FULL_CACHE_FIELDS
 SEARCH_CACHE_FIELDS = (
     "id",
     "cache_key",
@@ -90,7 +86,7 @@ class SQLAlchemyCacheRepository:
         self,
         cache_key: str,
         question: str,
-        tfidf_vector: str,
+        persona_hash: str,
         answer: str,
         cache_type: str = "knowledge",
         expires_at: datetime | None = None,
@@ -100,7 +96,7 @@ class SQLAlchemyCacheRepository:
             cache_key=cache_key,
             question=question,
             context_preview=context_preview,
-            tfidf_vector=tfidf_vector,
+            persona_hash=persona_hash,
             variations=json.dumps([answer]),
             variation_index=0,
             cache_type=cache_type,
@@ -128,25 +124,29 @@ class SQLAlchemyCacheRepository:
             cache.variations = json.dumps(variations)
             await self.session.commit()
 
-    async def get_next_variation(self, cache_id: int) -> str:
-        result = await self.session.execute(select(CachedAnswer).where(CachedAnswer.id == cache_id))
-        cache = result.scalar_one_or_none()
-
-        if not cache:
-            return ""
-
-        variations: list[str] = json.loads(cache.variations)
-        current_index = cache.variation_index
-
-        answer = variations[current_index]
-
-        cache.variation_index = (current_index + 1) % len(variations)
-        cache.hit_count += 1
-        cache.last_used = datetime.utcnow()
-
+    async def record_hit(self, cache_id: int, variation_count: int) -> None:
+        """Advance the rotation and count the hit in one atomic UPDATE (safe across machines)."""
+        await self.session.execute(
+            update(CachedAnswer)
+            .where(CachedAnswer.id == cache_id)
+            .values(
+                variation_index=(CachedAnswer.variation_index + 1) % variation_count,
+                hit_count=CachedAnswer.hit_count + 1,
+                last_used=datetime.utcnow(),
+            )
+        )
         await self.session.commit()
 
-        return answer
+    async def get_knowledge_questions(self, persona_hash: str) -> list[tuple[int, str]]:
+        """Live first-turn questions answered under the current persona: the similarity corpus."""
+        result = await self.session.execute(
+            select(CachedAnswer.id, CachedAnswer.question).where(
+                CachedAnswer.cache_type == "knowledge",
+                CachedAnswer.persona_hash == persona_hash,
+                or_(CachedAnswer.expires_at.is_(None), CachedAnswer.expires_at > datetime.utcnow()),
+            )
+        )
+        return [(row.id, row.question) for row in result]
 
     async def delete_expired(self) -> int:
         result = cast(

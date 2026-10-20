@@ -20,7 +20,12 @@ def session_with_rows(*rows):
 def test_defaults_keep_cache_off():
     settings = AppSettings()
 
-    assert settings.snapshot() == {"reasoning_effort": "none", "cache_enabled": False}
+    assert settings.snapshot() == {
+        "reasoning_effort": "none",
+        "cache_enabled": False,
+        "rate_limit_enabled": True,
+        "rate_limit_per_hour": 10,
+    }
     assert settings.is_stale()
 
 
@@ -35,7 +40,7 @@ async def test_load_applies_known_rows_and_ignores_unknown():
         )
     )
 
-    assert settings.snapshot() == {"reasoning_effort": "medium", "cache_enabled": True}
+    assert (settings.reasoning_effort, settings.cache_enabled) == ("medium", True)
     assert not settings.is_stale()
 
 
@@ -68,12 +73,20 @@ async def test_update_persists_and_applies_immediately():
 
     result = await settings.update(session, {"cache_enabled": True, "reasoning_effort": "high"})
 
-    assert result == {"reasoning_effort": "high", "cache_enabled": True}
+    assert (result["reasoning_effort"], result["cache_enabled"]) == ("high", True)
     assert session.merge.await_count == 2
     session.commit.assert_awaited_once()
 
 
-@pytest.mark.parametrize("changes", [{"reasoning_effort": "extreme"}, {"temperature": 1}])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"reasoning_effort": "extreme"},
+        {"temperature": 1},
+        {"rate_limit_per_hour": 0},
+        {"rate_limit_per_hour": "10"},
+    ],
+)
 async def test_update_rejects_invalid_changes_without_writing(changes):
     settings = AppSettings()
     session = session_with_rows()

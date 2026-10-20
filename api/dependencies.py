@@ -14,7 +14,7 @@ from services.app_settings import AppSettings
 from services.cache_service import CacheService
 from services.conversation_logger import ConversationLogger
 from services.push_over import PushOver
-from services.similarity_service import SimilarityService
+from services.similarity_service import SimilarityIndex
 from tools.llm_tools import Tools
 
 
@@ -29,7 +29,12 @@ def get_persona() -> Persona:
 
 @lru_cache
 def get_app_settings() -> AppSettings:
-    return AppSettings(reasoning_effort=get_config().llm_reasoning_effort or "none")
+    config = get_config()
+    return AppSettings(
+        reasoning_effort=config.llm_reasoning_effort or "none",
+        rate_limit_enabled=config.rate_limit_enabled,
+        rate_limit_per_hour=config.rate_limit_per_hour,
+    )
 
 
 async def refresh_app_settings() -> None:
@@ -75,12 +80,17 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+@lru_cache
+def get_similarity_index() -> SimilarityIndex:
+    """One index per process: rebuilding it per request would defeat its TTL."""
+    return SimilarityIndex()
+
+
 async def get_conversation_logger(session: AsyncSession) -> ConversationLogger:
     conversation_repo = SQLAlchemyConversationRepository(session)
     cache_repo = SQLAlchemyCacheRepository(session)
-    similarity_service = SimilarityService(threshold=0.80)
     persona_hash = get_persona().content_hash()
-    cache_service = CacheService(cache_repo, similarity_service, persona_hash)
+    cache_service = CacheService(cache_repo, get_similarity_index(), persona_hash)
 
     return ConversationLogger(
         conversation_repo=conversation_repo,

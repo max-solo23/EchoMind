@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from api.dependencies import get_db_session
 from api.main import app
 from api.middleware.auth import verify_api_key
-from api.middleware.rate_limit_state import rate_limit_state
 from api.routes import admin
 
 
@@ -171,12 +170,12 @@ class TestCacheEndpoints:
         assert client.get("/api/v1/admin/cache/search").status_code == 422
 
     def test_get_entry(self, client, logger):
-        logger.get_cache_entry.return_value = {**CACHE_ENTRY, "tfidf_vector": "[0.1]"}
+        logger.get_cache_entry.return_value = CACHE_ENTRY
 
         response = client.get("/api/v1/admin/cache/5")
 
         assert response.status_code == 200
-        assert response.json()["tfidf_vector"] == "[0.1]"
+        assert response.json()["variations"] == CACHE_ENTRY["variations"]
 
     def test_get_missing_entry(self, client, logger):
         logger.get_cache_entry.return_value = None
@@ -287,12 +286,6 @@ class TestSessionEndpoints:
 
 
 class TestRateLimitSettings:
-    @pytest.fixture(autouse=True)
-    def reset_state(self):
-        rate_limit_state.update_settings(enabled=True, rate_per_hour=10)
-        yield
-        rate_limit_state.update_settings(enabled=True, rate_per_hour=10)
-
     def test_get_without_database_has_no_buckets(self, client, monkeypatch):
         monkeypatch.setattr(admin, "is_database_configured", lambda: False)
 
@@ -302,17 +295,18 @@ class TestRateLimitSettings:
             "active_limits": [],
         }
 
-    def test_update_changes_live_settings(self, client):
-        response = client.post(
-            "/api/v1/admin/rate-limit", json={"enabled": False, "rate_per_hour": 99}
-        )
+    async def test_update_persists_and_applies(self, app_settings):
+        session = AsyncMock()
+        session.merge = AsyncMock()
+        request = admin.UpdateRateLimitRequest(enabled=False, rate_per_hour=99)
 
-        assert response.status_code == 200
-        assert response.json() == {"enabled": False, "rate_per_hour": 99, "active_limits": []}
-        assert rate_limit_state.get_settings() == {"enabled": False, "rate_per_hour": 99}
+        response = await admin.update_rate_limit_settings(request, session)
 
-    def test_update_rejects_zero_rate(self, client):
-        response = client.post("/api/v1/admin/rate-limit", json={"rate_per_hour": 0})
+        assert (response.enabled, response.rate_per_hour) == (False, 99)
+        assert (app_settings.rate_limit_enabled, app_settings.rate_limit_per_hour) == (False, 99)
+        session.commit.assert_awaited_once()
 
-        assert response.status_code == 422
-        assert rate_limit_state.rate_per_hour == 10
+    def test_update_rejects_zero_rate(self, app_settings):
+        with pytest.raises(ValueError):
+            admin.UpdateRateLimitRequest(rate_per_hour=0)
+        assert app_settings.rate_limit_per_hour == 10

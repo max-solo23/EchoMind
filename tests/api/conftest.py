@@ -40,7 +40,6 @@ def mock_chat_service():
 def client(test_config, mock_chat_service):
     with (
         patch("api.dependencies.get_config", return_value=test_config),
-        patch("api.main.get_config", return_value=test_config),
         patch("api.middleware.auth.get_config", return_value=test_config),
         patch("api.middleware.rate_limit.get_config", return_value=test_config),
     ):

@@ -52,7 +52,8 @@ class CachedAnswer(Base):
     cache_key: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     context_preview: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    tfidf_vector: Mapped[str] = mapped_column(Text, nullable=False)
+    # Rows from before 2026-10-20 have no hash and are never used for similar-question matches.
+    persona_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     variations: Mapped[str] = mapped_column(JSON, nullable=False)
     variation_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cache_type: Mapped[str] = mapped_column(String(20), default="knowledge", nullable=False)

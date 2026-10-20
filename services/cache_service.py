@@ -1,10 +1,12 @@
+import asyncio
 import hashlib
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 
 from repositories.cache_repo import SQLAlchemyCacheRepository
 
-from .similarity_service import SimilarityService
+from .similarity_service import SimilarityIndex, normalize_question
 
 
 class CacheType(str, Enum):
@@ -68,17 +70,33 @@ CACHE_DENYLIST = {
 }
 
 MIN_TOKENS_FOR_CACHE = 4
+MAX_VARIATIONS = 3
+
+
+@dataclass(frozen=True)
+class CacheLookup:
+    """entry_id: the matched entry (also when it still collects variations); answer: a hit."""
+
+    entry_id: int | None = None
+    answer: str | None = None
 
 
 class CacheService:
+    """Answer cache: exact key for every turn, similar-question match for first turns.
+
+    A matched question is served from cache only once it holds MAX_VARIATIONS answers; until
+    then the LLM answers again and the reply is stored as another variation, so visitors get
+    rotating wording instead of one frozen reply.
+    """
+
     def __init__(
         self,
         cache_repo: SQLAlchemyCacheRepository,
-        similarity_service: SimilarityService,
-        persona_hash: str
+        similarity_index: SimilarityIndex,
+        persona_hash: str,
     ):
         self.cache_repo = cache_repo
-        self.similarity = similarity_service
+        self.similarity = similarity_index
         self.persona_hash = persona_hash
 
     def should_skip_cache(self, message: str, is_continuation: bool = False) -> bool:
@@ -108,25 +126,46 @@ class CacheService:
 
     def build_cache_key(self, message: str, last_assistant_message: str | None = None) -> str:
         context = last_assistant_message or ""
-        combined = f"{self.persona_hash}||{context}||{message}"
+        combined = f"{self.persona_hash}||{context}||{normalize_question(message)}"
         return hashlib.sha256(combined.encode()).hexdigest()
+
+    async def _find_similar_entry(self, message: str) -> dict | None:
+        if self.similarity.is_stale():
+            questions = await self.cache_repo.get_knowledge_questions(self.persona_hash)
+            await asyncio.to_thread(self.similarity.rebuild, questions)
+        entry_id = await asyncio.to_thread(self.similarity.best_match, message)
+        return await self.cache_repo.get_cache_by_id(entry_id) if entry_id is not None else None
 
     async def get_cached_answer(
         self, message: str, last_assistant_message: str | None = None, is_continuation: bool = False
-    ) -> str | None:
+    ) -> CacheLookup:
         if self.should_skip_cache(message, is_continuation):
-            return None
+            return CacheLookup()
 
-        cache_key = self.build_cache_key(message, last_assistant_message)
+        entry = await self.cache_repo.get_cache_by_key(
+            self.build_cache_key(message, last_assistant_message)
+        )
+        if entry and entry.get("expires_at") and entry["expires_at"] < datetime.utcnow():
+            await self.cache_repo.delete_cache_by_id(entry["id"])
+            self.similarity.invalidate()
+            entry = None
+        # Similar wording only for first turns: a follow-up means something different after
+        # each earlier answer, so it keeps the exact context-bound key.
+        if entry is None and not is_continuation:
+            entry = await self._find_similar_entry(message)
+        if entry is None:
+            return CacheLookup()
 
-        exact_match = await self.cache_repo.get_cache_by_key(cache_key)
-        if exact_match:
-            if exact_match.get("expires_at") and exact_match["expires_at"] < datetime.utcnow():
-                await self.cache_repo.delete_cache_by_id(exact_match["id"])
-            else:
-                return await self.cache_repo.get_next_variation(exact_match["id"])
+        variations = entry["variations"]
+        if len(variations) < MAX_VARIATIONS:
+            return CacheLookup(entry_id=entry["id"])
+        return CacheLookup(
+            entry_id=entry["id"],
+            answer=variations[entry["variation_index"] % len(variations)],
+        )
 
-        return None
+    async def record_hit(self, cache_id: int) -> None:
+        await self.cache_repo.record_hit(cache_id, MAX_VARIATIONS)
 
     async def cache_answer(
         self,
@@ -134,35 +173,34 @@ class CacheService:
         answer: str,
         last_assistant_message: str | None = None,
         is_continuation: bool = False,
+        entry_id: int | None = None,
     ) -> int | None:
+        """Store the reply as a variation of the matched entry, or as a new entry."""
         if self.should_skip_cache(message, is_continuation):
             return None
 
         cache_key = self.build_cache_key(message, last_assistant_message)
+        if entry_id is None:
+            existing = await self.cache_repo.get_cache_by_key(cache_key)
+            entry_id = existing["id"] if existing else None
+
+        if entry_id is not None:
+            await self.cache_repo.add_variation(entry_id, answer)
+            return entry_id
+
         cache_type = self.get_cache_type(is_continuation)
-        expires_at = self.calculate_expiry(cache_type)
-
-        context_preview = None
-        if last_assistant_message:
-            context_preview = last_assistant_message[:200]
-
-        existing = await self.cache_repo.get_cache_by_key(cache_key)
-
-        if existing:
-            cache_id: int = existing["id"]
-            await self.cache_repo.add_variation(cache_id, answer)
-            return cache_id
-
-        tfidf_vector = self.similarity.vectorize(message)
-        return await self.cache_repo.create_cache(
+        new_id = await self.cache_repo.create_cache(
             cache_key=cache_key,
             question=message,
-            tfidf_vector=tfidf_vector,
+            persona_hash=self.persona_hash,
             answer=answer,
             cache_type=cache_type.value,
-            expires_at=expires_at,
-            context_preview=context_preview,
+            expires_at=self.calculate_expiry(cache_type),
+            context_preview=last_assistant_message[:200] if last_assistant_message else None,
         )
+        if cache_type is CacheType.KNOWLEDGE:
+            self.similarity.invalidate()
+        return new_id
 
     async def should_cache(
         self,

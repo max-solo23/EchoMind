@@ -1,165 +1,103 @@
 import json
+from pathlib import Path
 
-import numpy as np
 import pytest
 
-from services.similarity_service import SimilarityService
+from services import similarity_service as module
+from services.similarity_service import (
+    SimilarityIndex,
+    normalize_question,
+    same_content_words,
+)
 
 
-class TestSimilarityServiceInit:
-
-    def test_init_default_threshold(self):
-        service = SimilarityService()
-        assert service.threshold == 0.80
-
-    def test_init_custom_threshold(self):
-        service = SimilarityService(threshold=0.75)
-        assert service.threshold == 0.75
-
-    def test_init_vectorizer_not_fitted(self):
-        service = SimilarityService()
-        assert service._is_fitted is False
+DATA = Path(__file__).parent / "data"
 
 
-class TestVectorize:
-
-    def test_vectorize_returns_json_string(self):
-        service = SimilarityService()
-        result = service.vectorize("What is Python?")
-
-        assert isinstance(result, str)
-        parsed = json.loads(result)
-        assert isinstance(parsed, list)
-
-    def test_vectorize_fits_on_first_call(self):
-        service = SimilarityService()
-        assert service._is_fitted is False
-
-        service.vectorize("What is Python?")
-
-        assert service._is_fitted is True
-
-    def test_vectorize_subsequent_calls_use_transform(self):
-        service = SimilarityService()
-        service.vectorize("What is Python?")
-
-        result = service.vectorize("How do I learn Python?")
-        assert isinstance(result, str)
-        assert service._is_fitted is True
+def load_pairs(name):
+    return json.loads((DATA / f"{name}.json").read_text(encoding="utf-8"))["pairs"]
 
 
-class TestDeserializeVector:
-
-    def test_deserialize_returns_numpy_array(self):
-        service = SimilarityService()
-        json_vector = json.dumps([0.5, 0.3, 0.2])
-
-        result = service.deserialize_vector(json_vector)
-
-        assert isinstance(result, np.ndarray)
-        assert list(result) == [0.5, 0.3, 0.2]
+def matches(a, b, threshold=module.SIMILARITY_THRESHOLD):
+    index = SimilarityIndex(threshold=threshold)
+    index.rebuild([(1, a)])
+    return index.best_match(b) == 1
 
 
-class TestCalculateSimilarity:
-
-    def test_identical_vectors_return_one(self):
-        service = SimilarityService()
-        vector = np.array([0.5, 0.3, 0.2])
-
-        result = service.calculate_similarity(vector, vector)
-
-        assert result == pytest.approx(1.0)
-
-    def test_orthogonal_vectors_return_zero(self):
-        service = SimilarityService()
-        v1 = np.array([1.0, 0.0])
-        v2 = np.array([0.0, 1.0])
-
-        result = service.calculate_similarity(v1, v2)
-
-        assert result == pytest.approx(0.0)
-
-    def test_different_length_vectors_are_padded(self):
-        service = SimilarityService()
-        v1 = np.array([0.5, 0.5])
-        v2 = np.array([0.5, 0.5, 0.0, 0.0])
-
-        result = service.calculate_similarity(v1, v2)
-
-        assert result == pytest.approx(1.0)
+def test_normalize_keeps_language_symbols_and_drops_punctuation():
+    assert normalize_question("  What's your C# / C++  stack?? ") == "what s your c# c++ stack"
+    assert normalize_question("Max è disponibile?") == "max è disponibile"
 
 
-class TestFindBestMatch:
-
-    def test_empty_cache_returns_none(self):
-        service = SimilarityService()
-
-        result = service.find_best_match("What is Python?", [])
-
-        assert result is None
-
-    def test_match_above_threshold_returned(self):
-        service = SimilarityService(threshold=0.5)
-
-        question = "What is Python programming?"
-        vector_json = service.vectorize(question)
-
-        cached_questions = [{"id": 1, "question": question, "tfidf_vector": vector_json}]
-
-        result = service.find_best_match(question, cached_questions)
-
-        assert result is not None
-        assert result["id"] == 1
-        assert "similarity_score" in result
-        assert result["similarity_score"] >= 0.5
-
-    def test_match_below_threshold_returns_none(self):
-        service = SimilarityService(threshold=0.99)
-
-        q1 = "What is Python?"
-        q2 = "How do I cook pasta?"
-
-        v1 = service.vectorize(q1)
-
-        cached_questions = [{"id": 1, "question": q1, "tfidf_vector": v1}]
-
-        result = service.find_best_match(q2, cached_questions)
-
-        assert result is None
-
-    def test_returns_best_match_when_multiple_above_threshold(self):
-        service = SimilarityService(threshold=0.3)
-
-        base_q = "What programming language should I learn?"
-        similar_q = "What programming language is best to learn?"
-        different_q = "How do I make coffee?"
-
-        service.fit_on_corpus([base_q, similar_q, different_q])
-
-        cached_questions = [
-            {"id": 1, "question": similar_q, "tfidf_vector": service.vectorize(similar_q)},
-            {"id": 2, "question": different_q, "tfidf_vector": service.vectorize(different_q)},
-        ]
-
-        result = service.find_best_match(base_q, cached_questions)
-
-        assert result is not None
-        assert result["id"] == 1
+@pytest.mark.parametrize(
+    ("a", "b", "same"),
+    [
+        ("Is Max open to remote roles?", "is max opne to remote roles", True),  # transposition
+        ("Which projects did Max ship?", "Which projects has Max shipped?", True),  # inflection
+        ("Hai esperienza con PostgreSQL?", "hai esperienza con postgres", True),
+        ("Tell me about your C# projects", "Tell me about your AI projects", False),
+        ("What is your tech stack?", "What is your tech stack for mobile apps?", False),
+        ("Who are you?", "What is it?", False),  # no content words: exact key only
+    ],
+)
+def test_same_content_words(a, b, same):
+    assert same_content_words(a, b) is same
 
 
-class TestFitOnCorpus:
+@pytest.mark.parametrize(
+    ("name", "min_recall"), [("similarity_pairs", 0.80), ("similarity_pairs_holdout", 0.80)]
+)
+def test_threshold_has_full_precision_on_labeled_pairs(name, min_recall):
+    """A false match serves another question's answer, so precision must stay at 1.0."""
+    pairs = load_pairs(name)
+    results = [(matches(p["a"], p["b"]), p["same"]) for p in pairs]
 
-    def test_fit_on_corpus_sets_fitted_flag(self):
-        service = SimilarityService()
-        assert service._is_fitted is False
+    false_matches = [p for p, (hit, same) in zip(pairs, results, strict=True) if hit and not same]
+    true_matches = sum(1 for hit, same in results if hit and same)
+    recall = true_matches / sum(1 for _, same in results if same)
 
-        service.fit_on_corpus(["Question one", "Question two"])
+    assert false_matches == []
+    assert recall >= min_recall
 
-        assert service._is_fitted is True
 
-    def test_fit_on_empty_corpus_does_nothing(self):
-        service = SimilarityService()
+def test_extra_words_lower_the_score_instead_of_vanishing():
+    index = SimilarityIndex()
+    index.rebuild([(1, "What is your tech stack?")])
 
-        service.fit_on_corpus([])
+    (same,) = index.score("what is your tech stack")
+    (longer,) = index.score("what is your tech stack and what food do you like to cook")
 
-        assert service._is_fitted is False
+    assert same > 0.99
+    assert longer < 0.6
+
+
+def test_best_match_skips_high_score_with_different_content_words():
+    index = SimilarityIndex()
+    index.rebuild([(1, "Tell me about your AI projects"), (2, "Tell me about your C# projects")])
+
+    assert index.best_match("tell me about your c# project") == 2
+    assert index.best_match("Tell me about your Rust projects") is None
+
+
+def test_empty_index_matches_nothing():
+    index = SimilarityIndex()
+    index.rebuild([])
+
+    assert index.score("anything") == []
+    assert index.best_match("anything") is None
+
+
+def test_staleness_follows_ttl_and_invalidate(monkeypatch):
+    clock = {"now": 10.0}
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock["now"])
+    index = SimilarityIndex()
+    assert index.is_stale()
+
+    index.rebuild([(1, "What is your stack?")])
+    assert not index.is_stale()
+    clock["now"] += module.INDEX_TTL_SECONDS
+    assert index.is_stale()
+
+    index.rebuild([(1, "What is your stack?")])
+    index.invalidate()
+    assert index.is_stale()

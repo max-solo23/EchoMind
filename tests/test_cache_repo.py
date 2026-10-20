@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from repositories.cache_repo import SQLAlchemyCacheRepository
 
@@ -14,7 +15,7 @@ class MockCachedAnswer:
         cache_key: str = "abc123",
         question: str = "What is Python?",
         context_preview: str | None = None,
-        tfidf_vector: str = "[0.5, 0.3]",
+        persona_hash: str | None = "persona",
         variations: str = '["Answer 1"]',
         variation_index: int = 0,
         cache_type: str = "knowledge",
@@ -27,7 +28,7 @@ class MockCachedAnswer:
         self.cache_key = cache_key
         self.question = question
         self.context_preview = context_preview
-        self.tfidf_vector = tfidf_vector
+        self.persona_hash = persona_hash
         self.variations = variations
         self.variation_index = variation_index
         self.cache_type = cache_type
@@ -139,7 +140,7 @@ class TestCreateCache:
         result = await repo.create_cache(
             cache_key="abc123",
             question="What is Python?",
-            tfidf_vector="[0.5]",
+            persona_hash="persona",
             answer="A programming language",
             cache_type="knowledge",
             expires_at=datetime.utcnow() + timedelta(days=30),
@@ -147,6 +148,7 @@ class TestCreateCache:
 
         assert result == 42
         mock_session.add.assert_called_once()
+        assert mock_session.add.call_args.args[0].persona_hash == "persona"
         mock_session.commit.assert_called_once()
 
 
@@ -183,45 +185,35 @@ class TestAddVariation:
         await repo.add_variation(999, "Answer")
 
 
-class TestGetNextVariation:
+class TestRecordHit:
     @pytest.mark.asyncio
-    async def test_returns_current_and_rotates(self, repo, mock_session):
-        mock_cache = MockCachedAnswer(variations='["A", "B", "C"]', variation_index=0, hit_count=5)
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_cache
-        mock_session.execute.return_value = mock_result
+    async def test_rotates_and_counts_in_one_update(self, repo, mock_session):
+        await repo.record_hit(7, 3)
 
-        result = await repo.get_next_variation(1)
+        (statement,), _ = mock_session.execute.call_args
+        sql = str(statement.compile(dialect=postgresql.dialect()))
+        assert sql.startswith("UPDATE cached_answers SET variation_index=")
+        assert "(cached_answers.variation_index + %(variation_index_1)s) %% " in sql
+        assert "hit_count=(cached_answers.hit_count + " in sql
+        mock_session.commit.assert_awaited_once()
 
-        assert result == "A"
-        assert mock_cache.variation_index == 1
-        assert mock_cache.hit_count == 6
-        mock_session.commit.assert_called_once()
 
+class TestGetKnowledgeQuestions:
     @pytest.mark.asyncio
-    async def test_wraps_around_at_end(self, repo, mock_session):
-        mock_cache = MockCachedAnswer(
-            variations='["A", "B", "C"]',
-            variation_index=2,
-        )
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_cache
-        mock_session.execute.return_value = mock_result
+    async def test_returns_id_question_pairs_for_live_entries_of_the_persona(
+        self, repo, mock_session
+    ):
+        rows = [MagicMock(id=1, question="Q1"), MagicMock(id=2, question="Q2")]
+        mock_session.execute.return_value = rows
 
-        result = await repo.get_next_variation(1)
+        result = await repo.get_knowledge_questions("persona")
 
-        assert result == "C"
-        assert mock_cache.variation_index == 0
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_when_not_found(self, repo, mock_session):
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_session.execute.return_value = mock_result
-
-        result = await repo.get_next_variation(999)
-
-        assert result == ""
+        assert result == [(1, "Q1"), (2, "Q2")]
+        (statement,), _ = mock_session.execute.call_args
+        sql = str(statement.compile(dialect=postgresql.dialect()))
+        assert "cached_answers.cache_type = " in sql
+        assert "cached_answers.persona_hash = " in sql
+        assert "cached_answers.expires_at IS NULL OR cached_answers.expires_at > " in sql
 
 
 class TestDeleteExpired:
@@ -403,7 +395,6 @@ class TestCacheEntryShapes:
             "cache_key",
             "question",
             "context_preview",
-            "tfidf_vector",
             "variations",
             "variation_index",
             "cache_type",
@@ -419,13 +410,12 @@ class TestCacheEntryShapes:
             "id",
             "cache_key",
             "question",
-            "tfidf_vector",
             "variations",
             "variation_index",
             "cache_type",
             "expires_at",
         }
-        assert set(listed["entries"][0]) == full_detail_fields - {"tfidf_vector"}
+        assert set(listed["entries"][0]) == full_detail_fields
         assert set(searched[0]) == {
             "id",
             "cache_key",

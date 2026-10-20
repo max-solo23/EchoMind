@@ -6,9 +6,21 @@ import pytest
 from services.cache_service import (
     CACHE_DENYLIST,
     CACHE_TTL,
+    MAX_VARIATIONS,
+    CacheLookup,
     CacheService,
     CacheType,
 )
+from services.similarity_service import SimilarityIndex
+
+
+def entry(entry_id=1, variations=("a", "b", "c"), variation_index=0, expires_in_days=1):
+    return {
+        "id": entry_id,
+        "variations": list(variations),
+        "variation_index": variation_index,
+        "expires_at": datetime.utcnow() + timedelta(days=expires_in_days),
+    }
 
 
 class TestCacheType:
@@ -143,79 +155,87 @@ class TestBuildCacheKey:
 class TestGetCachedAnswer:
     @pytest.fixture
     def service(self):
-        mock_repo = AsyncMock()
-        mock_similarity = MagicMock()
-        return CacheService(mock_repo, mock_similarity, "test_hash")
+        repo = AsyncMock()
+        repo.get_cache_by_key.return_value = None
+        repo.get_knowledge_questions.return_value = []
+        return CacheService(repo, SimilarityIndex(), "test_hash")
 
-    @pytest.mark.asyncio
     async def test_skips_cache_for_denylist(self, service):
         result = await service.get_cached_answer("thanks", is_continuation=True)
 
-        assert result is None
+        assert result == CacheLookup()
         service.cache_repo.get_cache_by_key.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_returns_cached_answer_on_exact_match(self, service):
-        service.cache_repo.get_cache_by_key.return_value = {
-            "id": 1,
-            "expires_at": datetime.utcnow() + timedelta(days=1),
-        }
-        service.cache_repo.get_next_variation.return_value = "Cached response"
+    async def test_serves_rotating_variation_once_three_are_collected(self, service):
+        service.cache_repo.get_cache_by_key.return_value = entry(variation_index=4)
 
         result = await service.get_cached_answer("What is Python?")
 
-        assert result == "Cached response"
-        service.cache_repo.get_next_variation.assert_called_once_with(1)
+        assert result == CacheLookup(entry_id=1, answer="b")  # 4 % 3
 
-    @pytest.mark.asyncio
+    async def test_entry_still_collecting_variations_is_a_miss_that_names_the_entry(self, service):
+        service.cache_repo.get_cache_by_key.return_value = entry(variations=("a", "b"))
+
+        result = await service.get_cached_answer("What is Python?")
+
+        assert result == CacheLookup(entry_id=1)
+
     async def test_deletes_expired_exact_match(self, service):
-        service.cache_repo.get_cache_by_key.return_value = {
-            "id": 1,
-            "expires_at": datetime.utcnow() - timedelta(days=1),
-        }
-        service.cache_repo.get_all_cached_questions.return_value = []
+        service.cache_repo.get_cache_by_key.return_value = entry(expires_in_days=-1)
 
         result = await service.get_cached_answer("What is Python?")
 
         service.cache_repo.delete_cache_by_id.assert_called_once_with(1)
-        assert result is None
+        assert result == CacheLookup()
 
-    @pytest.mark.asyncio
-    async def test_returns_none_when_no_cache(self, service):
-        service.cache_repo.get_cache_by_key.return_value = None
-        service.cache_repo.get_all_cached_questions.return_value = []
-
+    async def test_returns_empty_lookup_when_nothing_cached(self, service):
         result = await service.get_cached_answer("What is Python?")
 
-        assert result is None
+        assert result == CacheLookup()
+        service.cache_repo.get_knowledge_questions.assert_awaited_once_with("test_hash")
 
-    @pytest.mark.asyncio
-    async def test_does_not_return_similar_match_when_no_exact(self, service):
-        service.cache_repo.get_cache_by_key.return_value = None
+    async def test_similar_first_turn_question_hits(self, service):
+        service.cache_repo.get_knowledge_questions.return_value = [(7, "What is your tech stack?")]
+        service.cache_repo.get_cache_by_id.return_value = entry(entry_id=7)
 
-        result = await service.get_cached_answer("What is Python?")
+        result = await service.get_cached_answer("whats your tech-stack?")
 
-        assert result is None
-        service.cache_repo.get_all_cached_questions.assert_not_called()
-        service.similarity.find_best_match.assert_not_called()
+        assert result == CacheLookup(entry_id=7, answer="a")
+        service.cache_repo.get_cache_by_id.assert_awaited_once_with(7)
 
-    @pytest.mark.asyncio
-    async def test_does_not_scan_expired_candidates_after_exact_miss(self, service):
-        service.cache_repo.get_cache_by_key.return_value = None
+    async def test_different_question_with_shared_words_misses(self, service):
+        service.cache_repo.get_knowledge_questions.return_value = [
+            (7, "Tell me about your AI projects")
+        ]
 
-        result = await service.get_cached_answer("What is Python?")
+        result = await service.get_cached_answer("Tell me about your C# projects")
 
-        assert result is None
-        service.cache_repo.get_all_cached_questions.assert_not_called()
+        assert result == CacheLookup()
+        service.cache_repo.get_cache_by_id.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_returns_none_without_fuzzy_match_after_exact_miss(self, service):
-        service.cache_repo.get_cache_by_key.return_value = None
+    async def test_follow_ups_use_the_exact_key_only(self, service):
+        result = await service.get_cached_answer(
+            "Tell me more about that project", "Earlier answer", is_continuation=True
+        )
 
-        result = await service.get_cached_answer("How do I cook pasta?")
+        assert result == CacheLookup()
+        service.cache_repo.get_knowledge_questions.assert_not_called()
 
-        assert result is None
-        service.similarity.find_best_match.assert_not_called()
+    async def test_index_is_loaded_once_per_ttl(self, service):
+        await service.get_cached_answer("What is Python?")
+        await service.get_cached_answer("What is Rust?")
+
+        service.cache_repo.get_knowledge_questions.assert_awaited_once()
+
+    async def test_key_ignores_case_and_punctuation(self, service):
+        assert service.build_cache_key("What is your stack?") == service.build_cache_key(
+            "what is your stack"
+        )
+
+    async def test_record_hit_rotates_over_max_variations(self, service):
+        await service.record_hit(5)
+
+        service.cache_repo.record_hit.assert_awaited_once_with(5, MAX_VARIATIONS)
 
 
 class TestShouldCache:
@@ -259,20 +279,19 @@ class TestShouldCache:
 class TestCacheAnswer:
     @pytest.fixture
     def service(self):
-        mock_repo = AsyncMock()
-        mock_similarity = MagicMock()
-        mock_similarity.vectorize.return_value = "[0.5, 0.3, 0.2]"
-        return CacheService(mock_repo, mock_similarity, "test_hash")
+        repo = AsyncMock()
+        repo.get_cache_by_key.return_value = None
+        index = SimilarityIndex()
+        index.rebuild([])
+        return CacheService(repo, index, "test_hash")
 
-    @pytest.mark.asyncio
     async def test_skips_denylist_messages(self, service):
         result = await service.cache_answer("thanks", "You're welcome!", is_continuation=True)
 
         assert result is None
         service.cache_repo.create_cache.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_adds_variation_to_existing(self, service):
+    async def test_adds_variation_to_existing_exact_key(self, service):
         service.cache_repo.get_cache_by_key.return_value = {"id": 1}
 
         result = await service.cache_answer("What is Python?", "A programming language")
@@ -280,31 +299,44 @@ class TestCacheAnswer:
         service.cache_repo.add_variation.assert_called_once_with(1, "A programming language")
         assert result == 1
 
-    @pytest.mark.asyncio
-    async def test_creates_new_cache_entry(self, service):
-        service.cache_repo.get_cache_by_key.return_value = None
+    async def test_adds_variation_to_the_matched_similar_entry(self, service):
+        result = await service.cache_answer("whats your stack?", "C# and Python", entry_id=9)
+
+        service.cache_repo.add_variation.assert_called_once_with(9, "C# and Python")
+        service.cache_repo.get_cache_by_key.assert_not_called()
+        assert result == 9
+
+    async def test_creates_new_entry_with_persona_and_invalidates_index(self, service):
         service.cache_repo.create_cache.return_value = 42
 
         result = await service.cache_answer("What is Python?", "A programming language")
 
         assert result == 42
-        service.cache_repo.create_cache.assert_called_once()
+        kwargs = service.cache_repo.create_cache.call_args.kwargs
+        assert kwargs["persona_hash"] == "test_hash"
+        assert kwargs["cache_type"] == "knowledge"
+        assert service.similarity.is_stale()
 
-    @pytest.mark.asyncio
+    async def test_follow_up_entry_keeps_index_fresh(self, service):
+        service.cache_repo.create_cache.return_value = 3
+
+        await service.cache_answer(
+            "Tell me more about Python programming please", "Response", "Earlier", True
+        )
+
+        assert service.cache_repo.create_cache.call_args.kwargs["cache_type"] == "conversational"
+        assert not service.similarity.is_stale()
+
     async def test_creates_cache_with_context_preview(self, service):
-        service.cache_repo.get_cache_by_key.return_value = None
         service.cache_repo.create_cache.return_value = 1
-
-        long_context = "A" * 300
 
         await service.cache_answer(
             "Tell me more about Python programming please",
             "Response",
-            last_assistant_message=long_context,
+            last_assistant_message="A" * 300,
         )
 
-        call_kwargs = service.cache_repo.create_cache.call_args[1]
-        assert len(call_kwargs["context_preview"]) == 200
+        assert len(service.cache_repo.create_cache.call_args.kwargs["context_preview"]) == 200
 
 
 class TestCacheStats:

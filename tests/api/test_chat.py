@@ -15,6 +15,7 @@ from api.routes.chat import (
     extract_last_assistant_message,
 )
 from core.chat import InvalidMessageError
+from services.cache_service import CacheLookup
 
 
 KICKSTART = b":" + b" " * 2048 + b"\n\n"
@@ -38,18 +39,20 @@ def session_factory(*sessions: object):
 async def test_cached_chat_logs_cached_reply_without_calling_service():
     chat_service = AsyncMock()
     conversation_logger = AsyncMock()
-    conversation_logger.check_cache.return_value = "Cached reply"
+    conversation_logger.check_cache.return_value = CacheLookup(entry_id=4, answer="Cached reply")
     conversation_logger.get_or_create_session.return_value = 7
 
     with (
         patch("api.routes.chat.is_database_configured", return_value=True),
         patch("api.routes.chat.get_config", return_value=object()),
-        patch("api.routes.chat.get_session", session_factory(object())),
+        patch("api.routes.chat.get_session", session_factory(object(), object())),
         patch("api.routes.chat.get_conversation_logger", return_value=conversation_logger),
     ):
         reply = await _chat_with_logging(
             chat_service, _Turn("Question", [], "session-id", "127.0.0.1")
         )
+        conversation_logger.log_and_cache.assert_not_awaited()  # off the critical path
+        await drain_background_tasks()
 
     assert reply == "Cached reply"
     chat_service.chat.assert_not_awaited()
@@ -60,7 +63,9 @@ async def test_cached_chat_logs_cached_reply_without_calling_service():
         cache_response=False,
         last_assistant_message=None,
         is_continuation=False,
+        cache_entry_id=4,
     )
+    conversation_logger.record_cache_hit.assert_awaited_once_with(4)
 
 
 @pytest.mark.asyncio
@@ -68,7 +73,7 @@ async def test_uncached_chat_calls_service_then_persists_reply():
     chat_service = AsyncMock()
     chat_service.chat.return_value = "Generated reply"
     conversation_logger = AsyncMock()
-    conversation_logger.check_cache.return_value = None
+    conversation_logger.check_cache.return_value = CacheLookup()
     conversation_logger.get_or_create_session.return_value = 9
 
     with (
@@ -91,6 +96,7 @@ async def test_uncached_chat_calls_service_then_persists_reply():
         cache_response=True,
         last_assistant_message=None,
         is_continuation=False,
+        cache_entry_id=None,
     )
 
 
@@ -104,7 +110,7 @@ async def test_streamed_chat_persists_accumulated_sse_reply():
     chat_service = MagicMock()
     chat_service.chat_stream.return_value = stream()
     conversation_logger = AsyncMock()
-    conversation_logger.check_cache.return_value = None
+    conversation_logger.check_cache.return_value = CacheLookup()
     conversation_logger.get_or_create_session.return_value = 11
 
     with (
@@ -134,6 +140,7 @@ async def test_streamed_chat_persists_accumulated_sse_reply():
         cache_response=True,
         last_assistant_message=None,
         is_continuation=False,
+        cache_entry_id=None,
     )
 
 
@@ -199,18 +206,19 @@ async def test_cached_stream_replays_answer_in_chunks_without_calling_service():
     cached = "x" * 45
     chat_service = MagicMock()
     conversation_logger = AsyncMock()
-    conversation_logger.check_cache.return_value = cached
+    conversation_logger.check_cache.return_value = CacheLookup(entry_id=4, answer=cached)
     conversation_logger.get_or_create_session.return_value = 3
 
     with (
         patch("api.routes.chat.is_database_configured", return_value=True),
         patch("api.routes.chat.get_config", return_value=object()),
-        patch("api.routes.chat.get_session", session_factory(object())),
+        patch("api.routes.chat.get_session", session_factory(object(), object())),
         patch("api.routes.chat.get_conversation_logger", return_value=conversation_logger),
     ):
         chunks = [
             c async for c in _stream_with_logging(chat_service, _Turn("Question", [], "s", None))
         ]
+        await drain_background_tasks()
 
     assert chunks[0] == KICKSTART
     assert [json.loads(c[6:]) for c in chunks[1:]] == [
@@ -227,7 +235,9 @@ async def test_cached_stream_replays_answer_in_chunks_without_calling_service():
         cache_response=False,
         last_assistant_message=None,
         is_continuation=False,
+        cache_entry_id=4,
     )
+    conversation_logger.record_cache_hit.assert_awaited_once_with(4)
 
 
 @pytest.mark.asyncio
@@ -241,7 +251,7 @@ async def test_stream_ignores_non_json_chunks_and_records_conversation_context()
     chat_service = MagicMock()
     chat_service.chat_stream.return_value = stream()
     conversation_logger = AsyncMock()
-    conversation_logger.check_cache.return_value = None
+    conversation_logger.check_cache.return_value = CacheLookup()
     conversation_logger.get_or_create_session.return_value = 5
 
     with (
@@ -266,6 +276,7 @@ async def test_stream_ignores_non_json_chunks_and_records_conversation_context()
         cache_response=True,
         last_assistant_message="earlier",
         is_continuation=True,
+        cache_entry_id=None,
     )
 
 
@@ -277,7 +288,7 @@ async def test_stream_with_empty_reply_is_not_persisted():
     chat_service = MagicMock()
     chat_service.chat_stream.return_value = stream()
     conversation_logger = AsyncMock()
-    conversation_logger.check_cache.return_value = None
+    conversation_logger.check_cache.return_value = CacheLookup()
 
     with (
         patch("api.routes.chat.is_database_configured", return_value=True),
@@ -300,7 +311,7 @@ async def test_stream_persist_failure_does_not_break_stream():
     chat_service = MagicMock()
     chat_service.chat_stream.return_value = stream()
     conversation_logger = AsyncMock()
-    conversation_logger.check_cache.return_value = None
+    conversation_logger.check_cache.return_value = CacheLookup()
     conversation_logger.log_and_cache.side_effect = RuntimeError("db down")
 
     with (
@@ -319,7 +330,7 @@ async def test_stream_persist_failure_does_not_break_stream():
 @pytest.mark.asyncio
 async def test_stream_sends_first_byte_before_touching_the_database():
     conversation_logger = AsyncMock()
-    conversation_logger.check_cache.return_value = None
+    conversation_logger.check_cache.return_value = CacheLookup()
 
     with (
         patch("api.routes.chat.is_database_configured", return_value=True),
@@ -397,3 +408,26 @@ class TestChatEndpoint:
         assert response.headers["Cache-Control"] == "no-cache, no-transform"
         assert b'"delta": "hi"' in response.content
         mock_chat_service.chat_stream.assert_called_once_with("hello there", [])
+
+
+@pytest.mark.asyncio
+async def test_miss_on_entry_collecting_variations_stores_reply_on_that_entry():
+    chat_service = AsyncMock()
+    chat_service.chat.return_value = "Second wording"
+    conversation_logger = AsyncMock()
+    conversation_logger.check_cache.return_value = CacheLookup(entry_id=8)
+    conversation_logger.get_or_create_session.return_value = 2
+
+    with (
+        patch("api.routes.chat.is_database_configured", return_value=True),
+        patch("api.routes.chat.get_config", return_value=object()),
+        patch("api.routes.chat.get_session", session_factory(object(), object())),
+        patch("api.routes.chat.get_conversation_logger", return_value=conversation_logger),
+    ):
+        reply = await _chat_with_logging(chat_service, _Turn("Question", [], "s", None))
+        await drain_background_tasks()
+
+    assert reply == "Second wording"
+    assert conversation_logger.log_and_cache.call_args.kwargs["cache_entry_id"] == 8
+    assert conversation_logger.log_and_cache.call_args.kwargs["cache_response"] is True
+    conversation_logger.record_cache_hit.assert_not_awaited()

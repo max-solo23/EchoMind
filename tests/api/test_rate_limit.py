@@ -5,13 +5,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
 from api.middleware.rate_limit import _build_increment_statement
-from api.middleware.rate_limit_state import rate_limit_state
 
 
 @pytest.fixture(autouse=True)
-def reset_rate_limit():
-    rate_limit_state.update_settings(enabled=True, rate_per_hour=15)
-    yield
+def limit_of_fifteen(app_settings):
+    app_settings._values["rate_limit_per_hour"] = 15
+    return app_settings
 
 
 class TestRateLimiting:
@@ -69,8 +68,8 @@ class TestRateLimiting:
             response = client.get("/health")
             assert response.status_code == 200
 
-    def test_rate_limiting_disabled(self, client, mock_chat_service):
-        rate_limit_state.update_settings(enabled=False, rate_per_hour=15)
+    def test_rate_limiting_disabled(self, client, mock_chat_service, app_settings):
+        app_settings._values["rate_limit_enabled"] = False
 
         for i in range(20):
             response = client.post(

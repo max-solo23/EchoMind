@@ -16,7 +16,6 @@ from api.dependencies import (
     refresh_app_settings,
 )
 from api.middleware.auth import verify_api_key
-from api.middleware.rate_limit_state import rate_limit_state
 from models.models import RateLimit
 from repositories.connection import get_session
 from services.app_settings import REASONING_EFFORTS
@@ -101,7 +100,6 @@ class CacheEntryDetail(BaseModel):
     cache_key: str | None = None
     question: str
     context_preview: str | None = None
-    tfidf_vector: str | None
     variations: list[str]
     variation_index: int
     cache_type: str = "knowledge"
@@ -424,10 +422,12 @@ async def cleanup_expired_cache(session: AsyncSession = Depends(get_db_session))
 
 @router.get("/rate-limit", response_model=RateLimitSettings)
 async def get_rate_limit_settings():
-    settings = rate_limit_state.get_settings()
+    await refresh_app_settings()
+    settings = get_app_settings()
     return RateLimitSettings(
-        **settings,
-        active_limits=await _get_active_rate_limit_buckets(settings["rate_per_hour"]),
+        enabled=settings.rate_limit_enabled,
+        rate_per_hour=settings.rate_limit_per_hour,
+        active_limits=await _get_active_rate_limit_buckets(settings.rate_limit_per_hour),
     )
 
 
@@ -459,17 +459,23 @@ def _display_rate_limit_key(key: str) -> str:
     return key.removeprefix("rate_limit:")
 
 
-@router.post("/rate-limit", response_model=RateLimitSettings)
-async def update_rate_limit_settings(request: UpdateRateLimitRequest):
+@router.post(
+    "/rate-limit", response_model=RateLimitSettings, dependencies=[Depends(require_database)]
+)
+async def update_rate_limit_settings(
+    request: UpdateRateLimitRequest, session: AsyncSession = Depends(get_db_session)
+):
+    changes = {"rate_limit_enabled": request.enabled, "rate_limit_per_hour": request.rate_per_hour}
+    settings = get_app_settings()
     try:
-        rate_limit_state.update_settings(
-            enabled=request.enabled, rate_per_hour=request.rate_per_hour
-        )
-        return RateLimitSettings(**rate_limit_state.get_settings())
+        await settings.update(session, {k: v for k, v in changes.items() if v is not None})
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid request data"
         ) from None
+    return RateLimitSettings(
+        enabled=settings.rate_limit_enabled, rate_per_hour=settings.rate_limit_per_hour
+    )
 
 
 class AppSettingsResponse(BaseModel):
@@ -485,10 +491,12 @@ class UpdateAppSettingsRequest(BaseModel):
 
 
 def _app_settings_response() -> AppSettingsResponse:
+    settings = get_app_settings()
     return AppSettingsResponse(
         model=get_config().llm_model,
+        reasoning_effort=settings.reasoning_effort,
         reasoning_efforts=list(REASONING_EFFORTS),
-        **get_app_settings().snapshot(),
+        cache_enabled=settings.cache_enabled,
     )
 
 

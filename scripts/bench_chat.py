@@ -108,8 +108,12 @@ CACHE_LOOKUP_ROUND_TRIPS = 4
 
 
 async def fake_db_lookup(*args, **kwargs):
-    await asyncio.sleep(DB_ROUND_TRIP * CACHE_LOOKUP_ROUND_TRIPS)
-    return None
+    from api.dependencies import get_app_settings
+    from services.cache_service import CacheLookup
+
+    if get_app_settings().cache_enabled:
+        await asyncio.sleep(DB_ROUND_TRIP * CACHE_LOOKUP_ROUND_TRIPS)
+    return CacheLookup()
 
 
 async def fake_db_write(*args, **kwargs):
@@ -125,7 +129,6 @@ def configure_app(simulate_db: bool | None = None):
         simulate_db = bool(os.environ.get("BENCH_DB"))
 
     patch("api.dependencies.get_config", return_value=CONFIG).start()
-    patch("api.main.get_config", return_value=CONFIG).start()
 
     from api.dependencies import get_chat_service
     from api.main import app
@@ -141,7 +144,7 @@ def configure_app(simulate_db: bool | None = None):
     if simulate_db:
         patch.object(chat_routes, "is_database_configured", return_value=True).start()
         patch.object(chat_routes, "get_config", return_value=CONFIG).start()
-        patch.object(chat_routes, "_get_cached_answer", fake_db_lookup).start()
+        patch.object(chat_routes, "_lookup_cache", fake_db_lookup).start()
         patch.object(chat_routes, "_persist_reply", fake_db_write).start()
 
     return app
@@ -226,7 +229,7 @@ async def run_inprocess():
         with (
             patch.object(chat_routes, "is_database_configured", return_value=True),
             patch.object(chat_routes, "get_config", return_value=CONFIG),
-            patch.object(chat_routes, "_get_cached_answer", fake_db_lookup),
+            patch.object(chat_routes, "_lookup_cache", fake_db_lookup),
             patch.object(chat_routes, "_persist_reply", fake_db_write),
         ):
             settings = get_app_settings()

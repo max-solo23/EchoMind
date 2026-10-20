@@ -6,8 +6,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy import case
 from sqlalchemy.dialects.postgresql import insert
 
-from api.dependencies import get_config
-from api.middleware.rate_limit_state import rate_limit_state
+from api.dependencies import get_app_settings, get_config, refresh_app_settings
 from models.models import RateLimit
 from repositories.connection import get_session
 
@@ -18,7 +17,10 @@ EXPIRY_SECONDS = 3600
 
 
 async def check_rate_limit(request: Request) -> None:
-    if not rate_limit_state.enabled:
+    # Limits live in app_settings so an admin change reaches every machine and survives restarts.
+    await refresh_app_settings()
+    settings = get_app_settings()
+    if not settings.rate_limit_enabled:
         return
 
     ip = _get_client_ip(request)
@@ -26,7 +28,7 @@ async def check_rate_limit(request: Request) -> None:
 
     try:
         count = await _increment_counter(key)
-        if count > rate_limit_state.rate_per_hour:
+        if count > settings.rate_limit_per_hour:
             raise HTTPException(
                 status_code=429,
                 detail="Rate limit exceeded. Try again later.",

@@ -21,6 +21,8 @@ def app_settings(monkeypatch):
     monkeypatch.setattr("api.routes.chat.refresh_app_settings", no_refresh)
     monkeypatch.setattr("api.routes.admin.get_app_settings", lambda: settings)
     monkeypatch.setattr("api.routes.admin.refresh_app_settings", no_refresh)
+    monkeypatch.setattr("api.middleware.rate_limit.get_app_settings", lambda: settings)
+    monkeypatch.setattr("api.middleware.rate_limit.refresh_app_settings", no_refresh)
     return settings
 
 

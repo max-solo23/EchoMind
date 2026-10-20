@@ -127,6 +127,10 @@ GET /api/v1/admin/sessions?page=1&limit=20
 DELETE /api/v1/admin/sessions/{session_id}
 DELETE /api/v1/admin/sessions
 
+# Model reasoning effort and answer cache switch
+GET /api/v1/admin/settings
+PUT /api/v1/admin/settings -d '{"reasoning_effort": "low", "cache_enabled": true}'
+
 # Rate limiting (dynamic configuration)
 GET /api/v1/admin/rate-limit
 POST /api/v1/admin/rate-limit \
@@ -142,7 +146,7 @@ Dynamic, runtime-configurable rate limiting via admin API:
 - **Default Limit** - 10 requests/hour per IP address
 - **Dynamic Configuration** - Toggle on/off or change rate without server restart
 - **Admin Control** - `POST /api/v1/admin/rate-limit` to update settings
-- **Thread-Safe** - Uses locking for concurrent access safety
+- **Shared and Persistent** - Stored in the `app_settings` table, so every instance applies a change within 30 s and it survives restarts
 - **User-Friendly Errors** - 429 responses include retry-after information
 
 **Example: Disable rate limiting**
@@ -173,13 +177,15 @@ Graceful handling of LLM API errors with user-friendly messages:
 
 ## Caching System
 
-EchoMind includes intelligent response caching:
+EchoMind includes an answer cache, switched on and off from the admin panel (off by default;
+when off, a chat request does no cache work at all):
 
-- **Context-Aware Keys** - Same question after different responses creates different cache entries
+- **Exact Keys** - SHA256 of persona hash + previous assistant reply + normalized question (case and punctuation ignored)
+- **Similar Questions** - First-turn questions are also matched by character n-gram TF-IDF (works for English and Italian, tolerates typos) plus a content-word check, so "C# projects" never matches "AI projects". Threshold 0.60 has precision 1.00 on the labeled pairs in `tests/data/`
+- **Three Variations** - A matched question goes to the LLM until three answers are stored, then the cache serves them in rotation
+- **Follow-ups** - Messages with history use only the exact context-bound key
 - **TTL Expiration** - Knowledge queries: 30 days, Conversational: 24 hours
 - **Denylist Filtering** - Short acknowledgements ("ok", "thanks") are not cached in continuations
-- **Similarity Matching** - TF-IDF with 90% threshold for fuzzy question matching
-- **Answer Variations** - Up to 3 variations per question with rotation
 
 ## Database Setup
 

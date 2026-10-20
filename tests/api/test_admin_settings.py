@@ -85,13 +85,12 @@ async def test_disabled_cache_skips_lookup_and_calls_llm(app_settings):
 
     with (
         patch("api.routes.chat.is_database_configured", return_value=True),
-        patch("api.routes.chat._get_cached_answer", AsyncMock()) as lookup,
+        patch("api.routes.chat.get_session", side_effect=AssertionError("no lookup when off")),
         patch("api.routes.chat._persist_in_background", AsyncMock()),
     ):
         reply = await _chat_with_logging(chat_service, _Turn("Question here", [], "s", None))
 
     assert reply == "Fresh reply"
-    lookup.assert_not_awaited()
 
 
 async def test_refresh_reads_database_once_per_ttl(app_settings):

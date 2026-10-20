@@ -2,7 +2,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from api.middleware.rate_limit_state import rate_limit_state
 from api.routes import admin
 
 
@@ -39,12 +38,6 @@ class FakeSessionContext:
 
     async def __aexit__(self, exc_type, exc, tb):
         return None
-
-
-@pytest.fixture(autouse=True)
-def reset_rate_limit_state():
-    rate_limit_state.update_settings(enabled=True, rate_per_hour=10)
-    yield
 
 
 async def test_rate_limit_settings_return_empty_active_limits_without_database(monkeypatch):

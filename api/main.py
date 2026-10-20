@@ -4,9 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from api.dependencies import get_config
 from api.middleware.cors import setup_cors
-from api.middleware.rate_limit_state import rate_limit_state
 from api.routes import admin, chat, health
 from repositories.connection import close_database
 
@@ -19,10 +17,6 @@ logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per OpenAI requ
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    config = get_config()
-    rate_limit_state.update_settings(
-        enabled=config.rate_limit_enabled, rate_per_hour=config.rate_limit_per_hour
-    )
     yield
     await chat.drain_background_tasks()
     await close_database()

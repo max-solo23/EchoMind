@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from api.middleware import auth, cors, rate_limit
-from api.middleware.rate_limit_state import RateLimitState, rate_limit_state
 
 
 def _request(headers: dict[str, str], client=("192.0.2.1", 1234)) -> Request:
@@ -74,19 +73,13 @@ class TestApp:
         assert body["name"] == "EchoMind API"
         assert body["endpoints"]["chat"] == "POST /api/v1/chat"
 
-    def test_lifespan_applies_rate_limit_config_and_closes_database(self, test_config):
-        config = replace(test_config, rate_limit_enabled=False, rate_limit_per_hour=42)
+    def test_lifespan_closes_database(self):
         close_database = AsyncMock()
 
-        with (
-            patch("api.main.get_config", return_value=config),
-            patch("api.main.close_database", close_database),
-            TestClient(app),
-        ):
-            assert rate_limit_state.get_settings() == {"enabled": False, "rate_per_hour": 42}
+        with patch("api.main.close_database", close_database), TestClient(app):
+            pass
 
         close_database.assert_awaited_once()
-        rate_limit_state.update_settings(enabled=True, rate_per_hour=10)
 
 
 class TestIncrementCounter:
@@ -118,22 +111,3 @@ class TestGetClientIp:
 
     def test_unknown_without_client(self):
         assert rate_limit._get_client_ip(_request({}, client=None)) == "unknown"
-
-
-class TestRateLimitState:
-    def test_rejects_rate_below_one(self):
-        state = RateLimitState()
-
-        with pytest.raises(ValueError):
-            state.update_settings(rate_per_hour=0)
-
-        assert state.rate_per_hour == 10
-
-    def test_partial_update_keeps_other_setting(self):
-        state = RateLimitState(enabled=True, rate_per_hour=10)
-
-        state.update_settings(enabled=False)
-        assert state.get_settings() == {"enabled": False, "rate_per_hour": 10}
-
-        state.update_settings(rate_per_hour=3)
-        assert state.get_settings() == {"enabled": False, "rate_per_hour": 3}

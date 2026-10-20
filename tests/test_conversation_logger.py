@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from services.cache_service import CacheLookup
 from services.conversation_logger import ConversationLogger
 
 
@@ -58,11 +59,12 @@ class TestGetOrCreateSession:
 class TestCheckCache:
     @pytest.mark.asyncio
     async def test_returns_cached_answer(self, logger, mock_cache_service):
-        mock_cache_service.get_cached_answer.return_value = "Cached response"
+        lookup = CacheLookup(entry_id=1, answer="Cached response")
+        mock_cache_service.get_cached_answer.return_value = lookup
 
         result = await logger.check_cache("What is Python?", None, False)
 
-        assert result == "Cached response"
+        assert result is lookup
 
     @pytest.mark.asyncio
     async def test_returns_none_when_caching_disabled(
@@ -76,7 +78,7 @@ class TestCheckCache:
 
         result = await logger.check_cache("Question", None, False)
 
-        assert result is None
+        assert result == CacheLookup()
         mock_cache_service.get_cached_answer.assert_not_called()
 
 

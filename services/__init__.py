@@ -2,7 +2,7 @@
 
 from .cache_service import CacheService
 from .conversation_logger import ConversationLogger
-from .similarity_service import SimilarityService
+from .similarity_service import SimilarityIndex
 
 
-__all__ = ["SimilarityService", "CacheService", "ConversationLogger"]
+__all__ = ["SimilarityIndex", "CacheService", "ConversationLogger"]

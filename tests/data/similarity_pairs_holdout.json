@@ -1,0 +1,30 @@
+{
+  "_about": "Held-out pairs written after the matcher was tuned on similarity_pairs.json; evaluated once, never tuned on. same=true means one cached answer fits both.",
+  "pairs": [
+    {"a": "What languages does Max speak?", "b": "What languages does Max speak?!", "same": true},
+    {"a": "What languages does Max speak?", "b": "what languages does max speek", "same": true},
+    {"a": "Has Max worked with Azure?", "b": "Has Max ever worked with Azure?", "same": true},
+    {"a": "Can I see Max's CV?", "b": "Can I see Max CV", "same": true},
+    {"a": "What is EchoMind?", "b": "what is echomind", "same": true},
+    {"a": "Which databases does Max use?", "b": "Which database does Max use?", "same": true},
+    {"a": "Quanti anni di esperienza ha Max?", "b": "Quanti anni di esperienza ha Max", "same": true},
+    {"a": "Max parla italiano?", "b": "Max parla l'italiano?", "same": true},
+    {"a": "Che lavoro fa Max?", "b": "Che lavoro fa Max adesso?", "same": true},
+    {"a": "Does Max write unit tests?", "b": "Does Max write unit-tests?", "same": true},
+
+    {"a": "Has Max worked with Azure?", "b": "Has Max worked with AWS?", "same": false},
+    {"a": "Has Max worked with Azure?", "b": "Has Max worked with Azure DevOps pipelines?", "same": false},
+    {"a": "Which databases does Max use?", "b": "Which frameworks does Max use?", "same": false},
+    {"a": "Does Max write unit tests?", "b": "Does Max write integration tests?", "same": false},
+    {"a": "Does Max write unit tests?", "b": "Does Max not write unit tests?", "same": false},
+    {"a": "What is EchoMind?", "b": "What is DeepTrace?", "same": false},
+    {"a": "What is EchoMind?", "b": "What is EchoMind's database?", "same": false},
+    {"a": "Max parla italiano?", "b": "Max parla inglese?", "same": false},
+    {"a": "Quanti anni di esperienza ha Max?", "b": "Quanti anni ha Max?", "same": false},
+    {"a": "Che lavoro fa Max?", "b": "Che lavoro cerca Max?", "same": false},
+    {"a": "Can I see Max's CV?", "b": "Can I see Max's GitHub?", "same": false},
+    {"a": "What languages does Max speak?", "b": "What languages does Max code in?", "same": false},
+    {"a": "Who are you?", "b": "What is it?", "same": false},
+    {"a": "Is Max a junior developer?", "b": "Is Max a senior developer?", "same": false}
+  ]
+}

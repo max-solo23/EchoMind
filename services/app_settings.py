@@ -20,10 +20,18 @@ REASONING_EFFORTS = ("none", "low", "medium", "high", "xhigh", "max")
 class AppSettings:
     """Admin-controlled runtime settings, stored in app_settings and cached in memory."""
 
-    def __init__(self, reasoning_effort: str = "none", cache_enabled: bool = False):
+    def __init__(
+        self,
+        reasoning_effort: str = "none",
+        cache_enabled: bool = False,
+        rate_limit_enabled: bool = True,
+        rate_limit_per_hour: int = 10,
+    ):
         self._values: dict[str, Any] = {
             "reasoning_effort": reasoning_effort,
             "cache_enabled": cache_enabled,
+            "rate_limit_enabled": rate_limit_enabled,
+            "rate_limit_per_hour": rate_limit_per_hour,
         }
         self._loaded_at: float | None = None
 
@@ -34,6 +42,14 @@ class AppSettings:
     @property
     def cache_enabled(self) -> bool:
         return bool(self._values["cache_enabled"])
+
+    @property
+    def rate_limit_enabled(self) -> bool:
+        return bool(self._values["rate_limit_enabled"])
+
+    @property
+    def rate_limit_per_hour(self) -> int:
+        return int(self._values["rate_limit_per_hour"])
 
     def snapshot(self) -> dict[str, Any]:
         return dict(self._values)
@@ -61,6 +77,9 @@ class AppSettings:
         effort = changes.get("reasoning_effort")
         if effort is not None and effort not in REASONING_EFFORTS:
             raise ValueError(f"reasoning_effort must be one of {REASONING_EFFORTS}")
+        rate = changes.get("rate_limit_per_hour")
+        if rate is not None and (not isinstance(rate, int) or rate < 1):
+            raise ValueError("rate_limit_per_hour must be at least 1")
 
         for key, value in changes.items():
             await session.merge(AppSetting(key=key, value=value))
