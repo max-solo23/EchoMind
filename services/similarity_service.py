@@ -9,8 +9,8 @@ if TYPE_CHECKING:
     from sklearn.feature_extraction.text import HashingVectorizer, TfidfTransformer
 
 
-# Chosen on tests/data/similarity_pairs.json (precision 1.00, recall 0.81) and confirmed on the
-# untouched similarity_pairs_holdout.json (precision 1.00, recall 0.80); see test_similarity_service.
+# Chosen on tests/data/similarity_pairs.json (precision 1.00, recall 0.67) and confirmed on the
+# untouched similarity_pairs_holdout.json (precision 1.00, recall 0.70); see test_similarity_service.
 SIMILARITY_THRESHOLD = 0.60
 # ponytail: a machine sees questions cached by the other machine after this delay; fine for
 # a cache, push invalidation if it ever matters.
@@ -29,15 +29,32 @@ STOP_WORDS = frozenset(
 )
 
 
+INFLECTION_SUFFIXES = ("s", "es", "ed", "d", "ing")
+VOWELS = frozenset("aeiou")
+
+
 def _same_word(a: str, b: str) -> bool:
-    """Equal, an inflection (one is a prefix of the other), or a one-letter typo/transposition."""
+    """Equal, an English inflection, an Italian final-vowel change, or two swapped letters.
+
+    Deliberately narrow: a bare prefix or any one-letter change would equate different words
+    ("docker"/"dockerxyz", "java"/"lava") and let one question borrow another's answer.
+    """
     if a == b:
         return True
-    if min(len(a), len(b)) >= 4 and (a.startswith(b) or b.startswith(a)):
-        return True
-    if len(a) == len(b) >= 4:
-        return sorted(a) == sorted(b) or sum(x != y for x, y in zip(a, b, strict=True)) <= 1
-    return False
+    short, long_ = sorted((a, b), key=len)
+    if len(short) >= 3 and long_[len(short) :] in INFLECTION_SUFFIXES and long_.startswith(short):
+        return True  # project/projects, use/used, build/building
+    if len(a) != len(b) or len(a) < 4:
+        return False
+    if a[:-1] == b[:-1] and a[-1] in VOWELS and b[-1] in VOWELS:
+        return True  # progetto/progetti, tecnologia/tecnologie
+    diff = [i for i in range(len(a)) if a[i] != b[i]]
+    return (
+        len(a) >= 5
+        and len(diff) == 2
+        and diff[1] == diff[0] + 1
+        and (a[diff[0]], a[diff[1]]) == (b[diff[1]], b[diff[0]])
+    )  # adjacent-letter typo: stronegst/strongest
 
 
 def same_content_words(a: str, b: str) -> bool:

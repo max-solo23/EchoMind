@@ -181,8 +181,9 @@ EchoMind includes an answer cache, switched on and off from the admin panel (off
 when off, a chat request does no cache work at all):
 
 - **Exact Keys** - SHA256 of persona hash + previous assistant reply + normalized question (case and punctuation ignored)
-- **Similar Questions** - First-turn questions are also matched by character n-gram TF-IDF (works for English and Italian, tolerates typos) plus a content-word check, so "C# projects" never matches "AI projects". Threshold 0.60 has precision 1.00 on the labeled pairs in `tests/data/`
-- **Three Variations** - A matched question goes to the LLM until three answers are stored, then the cache serves them in rotation
+- **Similar Questions** - First-turn questions are also matched by character n-gram TF-IDF (works for English and Italian, tolerates typos) plus a strict content-word check, so "C# projects" never matches "AI projects". Threshold 0.60 has precision 1.00 on the labeled pairs in `tests/data/`
+- **Three Variations** - The same question (case and punctuation ignored) goes to the LLM until three answers are stored, then the cache serves them in rotation, also to similar questions
+- **Poisoning-Safe** - A similar question never writes into another question's entry; its own answer is stored under its own key
 - **Follow-ups** - Messages with history use only the exact context-bound key
 - **TTL Expiration** - Knowledge queries: 30 days, Conversational: 24 hours
 - **Denylist Filtering** - Short acknowledgements ("ok", "thanks") are not cached in continuations

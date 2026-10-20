@@ -48,7 +48,6 @@ class ConversationLogger:
         cache_response: bool = True,
         last_assistant_message: str | None = None,
         is_continuation: bool = False,
-        cache_entry_id: int | None = None,
     ) -> int:
         conversation_id = await self.conversation_repo.log_conversation(
             session_db_id=session_db_id,
@@ -66,7 +65,6 @@ class ConversationLogger:
                     answer=bot_response,
                     last_assistant_message=last_assistant_message,
                     is_continuation=is_continuation,
-                    entry_id=cache_entry_id,
                 )
             except Exception:
                 logger.exception("Failed to cache conversation response")

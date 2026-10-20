@@ -75,7 +75,7 @@ MAX_VARIATIONS = 3
 
 @dataclass(frozen=True)
 class CacheLookup:
-    """entry_id: the matched entry (also when it still collects variations); answer: a hit."""
+    """Set only on a hit: the answer to serve and the entry whose rotation advances."""
 
     entry_id: int | None = None
     answer: str | None = None
@@ -84,9 +84,10 @@ class CacheLookup:
 class CacheService:
     """Answer cache: exact key for every turn, similar-question match for first turns.
 
-    A matched question is served from cache only once it holds MAX_VARIATIONS answers; until
-    then the LLM answers again and the reply is stored as another variation, so visitors get
-    rotating wording instead of one frozen reply.
+    An entry is served only once it holds MAX_VARIATIONS answers, then they rotate. Answers
+    are only ever added under the asker's own exact key: a merely similar question never
+    writes into another question's entry, so a crafted near-duplicate cannot plant its
+    answer where others will be served it.
     """
 
     def __init__(
@@ -158,7 +159,7 @@ class CacheService:
 
         variations = entry["variations"]
         if len(variations) < MAX_VARIATIONS:
-            return CacheLookup(entry_id=entry["id"])
+            return CacheLookup()  # still collecting; the reply is stored under the exact key
         return CacheLookup(
             entry_id=entry["id"],
             answer=variations[entry["variation_index"] % len(variations)],
@@ -173,20 +174,16 @@ class CacheService:
         answer: str,
         last_assistant_message: str | None = None,
         is_continuation: bool = False,
-        entry_id: int | None = None,
     ) -> int | None:
-        """Store the reply as a variation of the matched entry, or as a new entry."""
+        """Add the reply as a variation of this exact question's entry, or create the entry."""
         if self.should_skip_cache(message, is_continuation):
             return None
 
         cache_key = self.build_cache_key(message, last_assistant_message)
-        if entry_id is None:
-            existing = await self.cache_repo.get_cache_by_key(cache_key)
-            entry_id = existing["id"] if existing else None
-
-        if entry_id is not None:
-            await self.cache_repo.add_variation(entry_id, answer)
-            return entry_id
+        existing = await self.cache_repo.get_cache_by_key(cache_key)
+        if existing:
+            await self.cache_repo.add_variation(existing["id"], answer)
+            return int(existing["id"])
 
         cache_type = self.get_cache_type(is_continuation)
         new_id = await self.cache_repo.create_cache(

@@ -173,12 +173,20 @@ class TestGetCachedAnswer:
 
         assert result == CacheLookup(entry_id=1, answer="b")  # 4 % 3
 
-    async def test_entry_still_collecting_variations_is_a_miss_that_names_the_entry(self, service):
+    async def test_entry_still_collecting_variations_is_a_plain_miss(self, service):
         service.cache_repo.get_cache_by_key.return_value = entry(variations=("a", "b"))
 
         result = await service.get_cached_answer("What is Python?")
 
-        assert result == CacheLookup(entry_id=1)
+        assert result == CacheLookup()
+
+    async def test_similar_entry_still_collecting_variations_is_a_plain_miss(self, service):
+        service.cache_repo.get_knowledge_questions.return_value = [(7, "What is your tech stack?")]
+        service.cache_repo.get_cache_by_id.return_value = entry(entry_id=7, variations=("a",))
+
+        result = await service.get_cached_answer("whats your tech-stack?")
+
+        assert result == CacheLookup()
 
     async def test_deletes_expired_exact_match(self, service):
         service.cache_repo.get_cache_by_key.return_value = entry(expires_in_days=-1)
@@ -298,13 +306,6 @@ class TestCacheAnswer:
 
         service.cache_repo.add_variation.assert_called_once_with(1, "A programming language")
         assert result == 1
-
-    async def test_adds_variation_to_the_matched_similar_entry(self, service):
-        result = await service.cache_answer("whats your stack?", "C# and Python", entry_id=9)
-
-        service.cache_repo.add_variation.assert_called_once_with(9, "C# and Python")
-        service.cache_repo.get_cache_by_key.assert_not_called()
-        assert result == 9
 
     async def test_creates_new_entry_with_persona_and_invalidates_index(self, service):
         service.cache_repo.create_cache.return_value = 42

@@ -211,7 +211,6 @@ async def _persist_reply(turn: _Turn, reply: str, lookup: CacheLookup) -> None:
             cache_response=lookup.answer is None,
             last_assistant_message=turn.last_assistant_message,
             is_continuation=turn.is_continuation,
-            cache_entry_id=lookup.entry_id,
         )
         if lookup.answer is not None and lookup.entry_id is not None:
             await conversation_logger.record_cache_hit(lookup.entry_id)
