@@ -11,10 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **OpenAI Responses API provider** (2026-10-20): `LLM_PROVIDER=openai` without a base URL now uses `/v1/responses` through `OpenAIResponsesProvider`, which converts the Chat Completions history and stream events so `Chat` is unchanged. Needed because `gpt-6-luna` rejects function tools on `/v1/chat/completions` unless `reasoning_effort="none"`. Compatible providers behind `LLM_BASE_URL` stay on Chat Completions.
+- **Admin runtime settings** (2026-10-20): `app_settings` table (migration `c41e9a7d2f60`) and `GET/PUT /api/v1/admin/settings` for `reasoning_effort` (none..max) and `cache_enabled`, re-read at most every 30 s per machine. `LLM_REASONING_EFFORT` sets the default. The Portfolio admin shows them in a "Model" card.
+- **Token usage logging** (2026-10-20): every LLM call logs prompt, cached, completion and reasoning tokens.
+- **Similar-question cache** (2026-10-20): first-turn questions are matched by an in-memory character n-gram TF-IDF index (threshold 0.60) plus a strict content-word check; precision 1.00 on the labeled pairs in `tests/data/` (recall 0.67 tuning, 0.70 held-out). An entry is served only after its own exact question stored three LLM answers, which then rotate; similar questions read entries but never write into them (cache poisoning). Off by default; when off, a chat request does no cache work.
+
+### Removed
+- **`tfidf_vector` column** (migration `d7a3b5e19c42`): the per-request vectors were written but never read. `persona_hash` was added to scope similar-question matches to the current persona.
+- **`api/middleware/rate_limit_state.py`**: rate-limit settings now live in `app_settings`.
+
 ### Changed
 - **Chat response flow**: Consolidated cache-write and response logging paths while preserving non-streaming responses and the SSE event contract.
 - **Cache repository mapping**: Consolidated repeated cache-record mapping while retaining each public method's existing fields and query behavior.
-- **Cache matching**: Disabled fuzzy cache reuse; cache hits now require exact persona/context-aware keys to avoid returning stale or unrelated answers.
+- **Cache matching**: Exact keys are normalized (case and punctuation ignored) and still bound to persona and previous reply; follow-ups never use similar-question matching. A cache hit returns at once and its logging and rotation run in the background (hit 5-10 ms vs ~1.3 s LLM in the end-to-end check).
 - **Cache eligibility**: Low-signal question inputs like `?` and `ok?` are skipped instead of being cached.
 - **Streaming first byte**: the SSE kickstart now leaves before the cache lookup, so the client's EventSource opens immediately instead of after a database round trip (local benchmark with a simulated 20 ms database: time-to-first-byte 31 ms -> 1.8 ms).
 - **Conversation logging off the critical path**: cache and conversation writes run as a background task after the reply is delivered and are drained on shutdown; a failed write is logged instead of turning an already generated reply into a 500 (reply latency with a simulated database: 62 ms -> 31 ms).
@@ -23,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Tool calls blocked the event loop**: the synchronous Pushover notification inside a tool call stalled every other request for the duration of the HTTP call (measured 298 ms event-loop lag). Tool handlers now run in a worker thread via `asyncio.to_thread` (lag 11 ms, the timer floor).
 - **Chat reliability**: Cache write failures no longer fail a successfully logged chat response.
+- **Production outage after switching to `gpt-6-luna`** (2026-10-20): its default reasoning effort is not `none`, so every chat with tools got HTTP 400; fixed by `LLM_REASONING_EFFORT` and then the Responses API provider.
+- **App logs missing in production** (2026-10-20): uvicorn configures only its own loggers, so every `logger.info` (token usage, cache hits) was dropped; `api/main.py` now calls `logging.basicConfig`.
+- **Cache never used similar questions or more than one variation** (2026-10-20): vectors were refit per request and never read, stopword-only questions ("Who are you?") raised and were never cached, and `add_variation` was unreachable after the first write.
+- **Rate-limit admin changes** (2026-10-20) applied to one Fly machine only and were lost when it slept; they are now stored in `app_settings`.
 
 ---
 
